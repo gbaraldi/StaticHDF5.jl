@@ -122,7 +122,7 @@ function write_array(file_id, dataset_name::String, data::AbstractArray{T}) wher
     rank = length(dims)
 
     # Create dataspace
-    dims_hsize_t = [reverse(collect(dims))...]  # HDF5 uses C ordering (last dimension varies fastest)
+    dims_hsize_t = [reverse(dims)]  # HDF5 uses C ordering (last dimension varies fastest)
     dataspace_id = API.h5s_create_simple(rank, dims_hsize_t, C_NULL)
 
     # Create datatype
@@ -427,7 +427,7 @@ function read_array(file_id, dataset_name::String, ::Type{T}, dims::Tuple) where
     end
 
     # Create array to hold data
-    data = Array{T}(undef, dims...)
+    data = Array{T}(undef, dims)
 
     # Get datatype for requested type
     datatype_id = _get_h5_datatype(T)

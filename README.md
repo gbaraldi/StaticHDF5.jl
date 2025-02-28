@@ -1,6 +1,7 @@
 # SimpleHDF5
 
 A simple, lightweight Julia interface to HDF5 files focused on array operations.
+It's main goal is to support juliac
 
 ## Features
 
@@ -63,10 +64,10 @@ For optimal performance, you should use the type-stable version of `read_array`.
    ```julia
    # For 1D arrays (vectors)
    vector = read_array(file_id, "vector", Vector{Float64})
-   
+
    # For 2D arrays (matrices)
    matrix = read_array(file_id, "matrix", Matrix{Int})
-   
+
    # For N-dimensional arrays
    tensor = read_array(file_id, "tensor", Array{Float32, 3})
    ```
@@ -149,4 +150,4 @@ Note that JET.@test_opt only analyzes code for type stability but doesn't actual
 
 ## License
 
-MIT 
+MIT
