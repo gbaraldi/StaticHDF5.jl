@@ -33,8 +33,8 @@ close_file(file_id)
 
 # Read arrays back
 file_id = open_file("example.h5")
-integers = read_array(file_id, "integers", Int64)
-matrix = read_array(file_id, "matrix", Int64)
+integers = read_array(file_id, "integers", Vector{Int64})
+matrix = read_array(file_id, "matrix", Matrix{Int64})
 close_file(file_id)
 ```
 
