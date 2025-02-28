@@ -222,18 +222,15 @@ close_file(file_id)
 Throws an error if the actual dimensions don't match the expected dimensionality.
 """
 function read_array(file_id::API.hid_t, dataset_name::String, ::Type{Array{T,N}}) where {T,N}
-    # Get array info to check dimensions
-    _, dims = get_array_info(file_id, dataset_name)
-
-    # Check if dimensionality matches
-    if length(dims) != N
-        throw(API.H5Error("Dimension mismatch: expected $N-dimensional array, got $(length(dims))-dimensional array"))
-    end
-
     dataset_id = API.h5d_open(file_id, dataset_name, API.H5P_DEFAULT)
     dataspace_id = API.h5d_get_space(dataset_id)
 
-    ntuple(i -> dims[i], N)
+    rank = API.h5s_get_simple_extent_ndims(dataspace_id)
+    dims = Vector{API.hsize_t}(undef, rank)
+    API.h5s_get_simple_extent_dims(dataspace_id, dims_out, C_NULL)
+    if length(dims) != N
+        throw(API.H5Error("Dimension mismatch: expected $N-dimensional array, got $(length(dims))-dimensional array"))
+    end
     data = Array{T}(undef, ntuple(i -> dims[i], N))
 
     # Get stored datatype for type checking
@@ -241,7 +238,7 @@ function read_array(file_id::API.hid_t, dataset_name::String, ::Type{Array{T,N}}
     # Get the Julia type corresponding to the stored type
     stored_julia_type = _get_julia_type(stored_datatype_id)
 
-    if !(stored_julia_type == T)
+    if !(stored_julia_type === T)
         API.h5t_close(stored_datatype_id)
         API.h5s_close(dataspace_id)
         API.h5d_close(dataset_id)
@@ -392,8 +389,15 @@ function _get_h5_datatype(::Type{UInt8})
     return API.h5t_copy(API.H5T_NATIVE_UINT8)
 end
 
+# Bool is a mess in HDF5, we use a UInt8 with precision 1
+function bool_type()
+    bool_type = h5t_copy(API.H5T_NATIVE_UINT8)
+    h5t_set_precision(bool_type, 1)
+    return bool_type
+end
+
 function _get_h5_datatype(::Type{Bool})
-    return API.bool_type()
+    return bool_type()
 end
 
 function _get_julia_type(datatype_id::API.hid_t)

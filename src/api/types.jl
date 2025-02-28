@@ -555,9 +555,6 @@ const H5T_NATIVE_FLOAT  = _read_const(:H5T_NATIVE_FLOAT_g)
 const H5T_NATIVE_DOUBLE = _read_const(:H5T_NATIVE_DOUBLE_g)
 # Other type constants
 const H5T_VARIABLE = reinterpret(UInt, -1)
-
-JL_BOOL_TYPE::hid_t = -1
-
 # Filter constants
 const H5Z_FLAG_MANDATORY = 0x0000
 const H5Z_FLAG_OPTIONAL = 0x0001
