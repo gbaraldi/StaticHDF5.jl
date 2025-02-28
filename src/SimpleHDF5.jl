@@ -2,7 +2,7 @@ module SimpleHDF5
 
 export open_file, create_file, close_file
 export write_array, read_array
-export create_group, list_datasets
+export create_group, close_group, list_datasets
 export get_array_info
 export READ_ONLY, READ_WRITE, CREATE  # Export the constants
 
@@ -67,7 +67,7 @@ Close an HDF5 file.
 # Arguments
 - `file_id`: File identifier returned by `open_file` or `create_file`
 """
-function close_file(file_id)
+function close_file(file_id::API.hid_t)
     API.h5f_close(file_id)
     return nothing
 end
@@ -87,13 +87,18 @@ Returns a group identifier that should be closed with `API.h5g_close`.
 file_id = create_file("data.h5")
 group_id = create_group(file_id, "measurements")
 # ... operations on group ...
-API.h5g_close(group_id)
+close_group(group_id)
 close_file(file_id)
 ```
 """
-function create_group(file_id, group_name::String)
+function create_group(file_id::API.hid_t, group_name::String)
     group_id = API.h5g_create(file_id, group_name, API.H5P_DEFAULT, API.H5P_DEFAULT, API.H5P_DEFAULT)
     return group_id
+end
+
+function close_group(group_id::API.hid_t)
+    API.h5g_close(group_id)
+    return nothing
 end
 
 """
@@ -113,19 +118,16 @@ write_array(file_id, "matrix", rand(10, 10))
 close_file(file_id)
 ```
 """
-function write_array(file_id, dataset_name::String, data::AbstractArray{T}) where T
+function write_array(file_id::API.hid_t, dataset_name::String, data::AbstractArray{T}) where T
     # Convert to regular Array if it's not already one
     array_data = Array(data)
 
-    # Get dimensions of the array
     dims = size(array_data)
     rank = length(dims)
 
-    # Create dataspace
     dims_hsize_t = [reverse(dims)]  # HDF5 uses C ordering (last dimension varies fastest)
     dataspace_id = API.h5s_create_simple(rank, dims_hsize_t, C_NULL)
 
-    # Create datatype
     datatype_id = _get_h5_datatype(T)
 
     # Create dataset
@@ -174,14 +176,10 @@ elem_type, dims = get_array_info(file_id, "matrix")
 close_file(file_id)
 ```
 """
-function get_array_info(file_id, dataset_name::String)
-    # Open the dataset
+function get_array_info(file_id::API.hid_t, dataset_name::String)
     dataset_id = API.h5d_open(file_id, dataset_name, API.H5P_DEFAULT)
-
-    # Get dataspace
     dataspace_id = API.h5d_get_space(dataset_id)
 
-    # Get dimensions
     rank = API.h5s_get_simple_extent_ndims(dataspace_id)
     dims_out = Vector{API.hsize_t}(undef, rank)
     API.h5s_get_simple_extent_dims(dataspace_id, dims_out, C_NULL)
@@ -189,10 +187,7 @@ function get_array_info(file_id, dataset_name::String)
     # Convert dimensions to Julia ordering (first dimension varies fastest)
     dims = Tuple(reverse(dims_out))
 
-    # Get datatype
     datatype_id = API.h5d_get_type(dataset_id)
-
-    # Determine Julia type from HDF5 type
     julia_type = _get_julia_type(datatype_id)
 
     # Clean up
@@ -226,50 +221,37 @@ close_file(file_id)
 # Notes
 Throws an error if the actual dimensions don't match the expected dimensionality.
 """
-function read_array(file_id, dataset_name::String, ::Type{Array{T,N}}) where {T,N}
+function read_array(file_id::API.hid_t, dataset_name::String, ::Type{Array{T,N}}) where {T,N}
     # Get array info to check dimensions
-    elem_type, dims = get_array_info(file_id, dataset_name)
-    
+    _, dims = get_array_info(file_id, dataset_name)
+
     # Check if dimensionality matches
     if length(dims) != N
         throw(API.H5Error("Dimension mismatch: expected $N-dimensional array, got $(length(dims))-dimensional array"))
     end
-    
-    # Open the dataset
-    dataset_id = API.h5d_open(file_id, dataset_name, API.H5P_DEFAULT)
 
-    # Get dataspace
+    dataset_id = API.h5d_open(file_id, dataset_name, API.H5P_DEFAULT)
     dataspace_id = API.h5d_get_space(dataset_id)
 
-
-    # Create array to hold data
     ntuple(i -> dims[i], N)
     data = Array{T}(undef, ntuple(i -> dims[i], N))
 
-    # Get datatype for requested type
-    datatype_id = _get_h5_datatype(T)
-
     # Get stored datatype for type checking
     stored_datatype_id = API.h5d_get_type(dataset_id)
-    stored_class = API.h5t_get_class(stored_datatype_id)
-    requested_class = API.h5t_get_class(datatype_id)
-
     # Get the Julia type corresponding to the stored type
     stored_julia_type = _get_julia_type(stored_datatype_id)
 
-    # Check if types are compatible
-    if !_are_types_compatible(stored_class, requested_class, stored_julia_type, T)
-        API.h5t_close(datatype_id)
+    if !(stored_julia_type == T)
         API.h5t_close(stored_datatype_id)
         API.h5s_close(dataspace_id)
         API.h5d_close(dataset_id)
-        throw(API.H5Error("Type mismatch: requested type $T is not compatible with stored type $stored_julia_type"))
+        throw(API.H5Error("Type mismatch: requested type $T is not the stored type $stored_julia_type"))
     end
 
     # Read data
     API.h5d_read(
         dataset_id,
-        datatype_id,
+        stored_datatype_id,
         API.H5S_ALL,
         API.H5S_ALL,
         API.H5P_DEFAULT,
@@ -277,7 +259,6 @@ function read_array(file_id, dataset_name::String, ::Type{Array{T,N}}) where {T,
     )
 
     # Clean up
-    API.h5t_close(datatype_id)
     API.h5t_close(stored_datatype_id)
     API.h5s_close(dataspace_id)
     API.h5d_close(dataset_id)
@@ -286,186 +267,26 @@ function read_array(file_id, dataset_name::String, ::Type{Array{T,N}}) where {T,
 end
 
 """
-    read_array(file_id::hid_t, dataset_name::String, ::Type{Vector{T}}) where T
+    read_array(file_id::hid_t, dataset_name::String) where {T,N}
 
-Read a 1D array from an HDF5 file.
-This is a convenience method for `read_array(file_id, dataset_name, Array{T,1})`.
-"""
-# function read_array(file_id, dataset_name::String, ::Type{Vector{T}}) where T
-#     return read_array(file_id, dataset_name, Array{T,1})
-# end
-
-# """
-#     read_array(file_id::hid_t, dataset_name::String, ::Type{Matrix{T}}) where T
-
-# Read a 2D array from an HDF5 file.
-# This is a convenience method for `read_array(file_id, dataset_name, Array{T,2})`.
-# """
-# function read_array(file_id, dataset_name::String, ::Type{Matrix{T}}) where T
-#     return read_array(file_id, dataset_name, Array{T,2})
-# end
-
-"""
-    read_array(file_id::hid_t, dataset_name::String, ::Type{T}) where T
-
-Read an array from an HDF5 file with a specified element type.
-This version infers the dimensions from the file.
+Read an array from an HDF5 file with a specified array type.
+This infers the array dimensions from the file so it's not type stable
 
 # Arguments
 - `file_id`: File identifier
 - `dataset_name`: Name of the dataset to read
-- `T`: Element type of the array
+- `Array{T,N}`: The array type to read (e.g., Vector{Float64}, Matrix{Int}, Array{Float32,3}, etc.)
 
 # Example
 ```julia
 file_id = open_file("data.h5")
-data = read_array(file_id, "dataset", Float64)  # Infers dimensions from file
+data = read_array(file_id, "vector")  # For 1D arrays
 close_file(file_id)
 ```
-
-# Notes
-This method is not type stable with respect to the array dimensions,
-as they are only known at runtime. For type-stable code, use the parametric
-array type version: `read_array(file_id, dataset_name, Array{T,N})`.
 """
-function read_array(file_id, dataset_name::String, ::Type{T}) where T
-    # Get array info to determine dimensions
+function read_array(file_id::API.hid_t, dataset_name::String)
     elem_type, dims = get_array_info(file_id, dataset_name)
-    
-    # Open the dataset
-    dataset_id = API.h5d_open(file_id, dataset_name, API.H5P_DEFAULT)
-
-    # Get dataspace
-    dataspace_id = API.h5d_get_space(dataset_id)
-
-    # Create array to hold data
-    data = Array{T}(undef, dims...)
-
-    # Get datatype for requested type
-    datatype_id = _get_h5_datatype(T)
-
-    # Get stored datatype for type checking
-    stored_datatype_id = API.h5d_get_type(dataset_id)
-    stored_class = API.h5t_get_class(stored_datatype_id)
-    requested_class = API.h5t_get_class(datatype_id)
-
-    # Get the Julia type corresponding to the stored type
-    stored_julia_type = _get_julia_type(stored_datatype_id)
-
-    # Check if types are compatible
-    if !_are_types_compatible(stored_class, requested_class, stored_julia_type, T)
-        API.h5t_close(datatype_id)
-        API.h5t_close(stored_datatype_id)
-        API.h5s_close(dataspace_id)
-        API.h5d_close(dataset_id)
-        throw(API.H5Error("Type mismatch: requested type $T is not compatible with stored type $stored_julia_type"))
-    end
-
-    # Read data
-    API.h5d_read(
-        dataset_id,
-        datatype_id,
-        API.H5S_ALL,
-        API.H5S_ALL,
-        API.H5P_DEFAULT,
-        data
-    )
-
-    # Clean up
-    API.h5t_close(datatype_id)
-    API.h5t_close(stored_datatype_id)
-    API.h5s_close(dataspace_id)
-    API.h5d_close(dataset_id)
-
-    return data
-end
-
-"""
-    read_array(file_id::hid_t, dataset_name::String, ::Type{T}, dims::Tuple) where T
-
-Read an array from an HDF5 file with specified dimensions.
-This version ensures type stability by pre-specifying the dimensions.
-
-# Arguments
-- `file_id`: File identifier
-- `dataset_name`: Name of the dataset to read
-- `T`: Element type of the array
-- `dims`: Expected dimensions of the array
-
-# Example
-```julia
-file_id = open_file("data.h5")
-data = read_array(file_id, "matrix", Float64, (10, 10))
-close_file(file_id)
-```
-
-# Notes
-Throws an error if the actual dimensions don't match the expected dimensions.
-This method is deprecated in favor of the parametric type version:
-`read_array(file_id, dataset_name, Array{T,N})`.
-"""
-function read_array(file_id, dataset_name::String, ::Type{T}, dims::Tuple) where T
-    # Open the dataset
-    dataset_id = API.h5d_open(file_id, dataset_name, API.H5P_DEFAULT)
-
-    # Get dataspace
-    dataspace_id = API.h5d_get_space(dataset_id)
-
-    # Get actual dimensions
-    rank = API.h5s_get_simple_extent_ndims(dataspace_id)
-    dims_out = Vector{API.hsize_t}(undef, rank)
-    API.h5s_get_simple_extent_dims(dataspace_id, dims_out, C_NULL)
-
-    # Convert dimensions to Julia ordering (first dimension varies fastest)
-    actual_dims = Tuple(reverse(dims_out))
-
-    # Check if dimensions match
-    if actual_dims != dims
-        API.h5s_close(dataspace_id)
-        API.h5d_close(dataset_id)
-        throw(API.H5Error("Dimension mismatch: expected $dims, got $actual_dims"))
-    end
-
-    # Create array to hold data
-    data = Array{T}(undef, dims)
-
-    # Get datatype for requested type
-    datatype_id = _get_h5_datatype(T)
-
-    # Get stored datatype for type checking
-    stored_datatype_id = API.h5d_get_type(dataset_id)
-    stored_class = API.h5t_get_class(stored_datatype_id)
-    requested_class = API.h5t_get_class(datatype_id)
-
-    # Get the Julia type corresponding to the stored type
-    stored_julia_type = _get_julia_type(stored_datatype_id)
-
-    # Check if types are compatible
-    if !_are_types_compatible(stored_class, requested_class, stored_julia_type, T)
-        API.h5t_close(datatype_id)
-        API.h5t_close(stored_datatype_id)
-        API.h5s_close(dataspace_id)
-        API.h5d_close(dataset_id)
-        throw(API.H5Error("Type mismatch: requested type $T is not compatible with stored type $stored_julia_type"))
-    end
-
-    # Read data
-    API.h5d_read(
-        dataset_id,
-        datatype_id,
-        API.H5S_ALL,
-        API.H5S_ALL,
-        API.H5P_DEFAULT,
-        data
-    )
-
-    # Clean up
-    API.h5t_close(datatype_id)
-    API.h5t_close(stored_datatype_id)
-    API.h5s_close(dataspace_id)
-    API.h5d_close(dataset_id)
-
-    return data
+    return read_array(file_id, dataset_name, Array{elem_type, length(dims)})
 end
 
 """
@@ -484,7 +305,7 @@ datasets = list_datasets(file_id)
 close_file(file_id)
 ```
 """
-function list_datasets(file_id, path::String="/")
+function list_datasets(file_id::API.hid_t, path::String="/")
     # Open the group
     group_id = if path == "/"
         API.h5g_open(file_id, "/", API.H5P_DEFAULT)
@@ -572,13 +393,10 @@ function _get_h5_datatype(::Type{UInt8})
 end
 
 function _get_h5_datatype(::Type{Bool})
-    # Create a proper boolean datatype using H5T_NATIVE_B8
-    bool_id = API.h5t_copy(API.H5T_NATIVE_B8)
-    return bool_id
+    return API.bool_type()
 end
 
-# Helper function to get Julia type from HDF5 datatype
-function _get_julia_type(datatype_id)
+function _get_julia_type(datatype_id::API.hid_t)
     class = API.h5t_get_class(datatype_id)
 
     if class == API.H5T_INTEGER
@@ -589,16 +407,6 @@ function _get_julia_type(datatype_id)
         size = API.h5t_get_size(datatype_id)
 
         # Special case for Bool
-        if size == 1 && !is_signed
-            # Check if this is a Bool type
-            native_type_id = API.h5t_get_native_type(datatype_id, API.H5T_DIR_ASCEND)
-            if API.h5t_equal(native_type_id, API.H5T_NATIVE_B8) > 0
-                API.h5t_close(native_type_id)
-                return Bool
-            end
-            API.h5t_close(native_type_id)
-        end
-
         # Map to Julia integer types
         if is_signed
             if size == 1
@@ -610,10 +418,13 @@ function _get_julia_type(datatype_id)
             elseif size == 8
                 return Int64
             else
-                return Int64  # Default for unusual sizes
+                error("Unsupported signed integer size: $size")
             end
         else
             if size == 1
+                if API.h5t_get_precision(datatype_id) == 1
+                    return Bool
+                end
                 return UInt8
             elseif size == 2
                 return UInt16
@@ -622,13 +433,14 @@ function _get_julia_type(datatype_id)
             elseif size == 8
                 return UInt64
             else
-                return UInt64  # Default for unusual sizes
+                error("Unsupported unsigned integer size: $size")
             end
         end
     elseif class == API.H5T_FLOAT
         size = API.h5t_get_size(datatype_id)
-
-        if size == 4
+        if size == 2
+            return Float16
+        elseif size == 4
             return Float32
         elseif size == 8
             return Float64
@@ -636,51 +448,24 @@ function _get_julia_type(datatype_id)
     elseif class == API.H5T_STRING
         return String
     elseif class == API.H5T_BITFIELD
-        # HDF5 bitfield class is used for booleans
-        return Bool
+        size = API.h5t_get_size(datatype_id)
+        if size == 1
+            return UInt8
+        elseif size == 2
+            return UInt16
+        elseif size == 4
+            return UInt32
+        elseif size == 8
+            return UInt64
+        else
+            error("Unsupported bitfield size: $size")
+        end
     end
 
     # Default to Float64 if we can't determine the type
-    return Float64
+    error("Unsupported HDF5 datatype class: $class")
 end
 
-# Helper function to check if types are compatible for conversion
-function _are_types_compatible(stored_class, requested_class, stored_julia_type, requested_julia_type)
-    # Same class is always compatible
-    if stored_class == requested_class
-        return true
-    end
 
-    # Integer and float can be converted between each other
-    if (stored_class == API.H5T_INTEGER && requested_class == API.H5T_FLOAT) ||
-       (stored_class == API.H5T_FLOAT && requested_class == API.H5T_INTEGER)
-        return true
-    end
-
-    # Special case for Bool arrays
-    if stored_julia_type == Bool
-        # Allow reading Bool as Bool
-        if requested_julia_type == Bool
-            return true
-        end
-
-        # Allow reading Bool as UInt8 (for compatibility with tests)
-        if requested_julia_type == UInt8
-            return true
-        end
-
-        # Disallow reading Bool as other integer types
-        if requested_julia_type <: Integer
-            return false
-        end
-    end
-
-    # Disallow reading integers as Bool
-    if stored_class == API.H5T_INTEGER && requested_class == API.H5T_BITFIELD
-        return false
-    end
-
-    return false
-end
 
 end # module SimpleHDF5

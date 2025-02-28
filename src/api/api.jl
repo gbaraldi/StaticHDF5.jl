@@ -12,6 +12,13 @@ include("error.jl")
 include("functions.jl") # core API ccall wrappers
 include("helpers.jl")
 
+# Bool is a mess in HDF5, we use a UInt8 with precision 1
+function bool_type()
+    bool_type = h5t_copy(API.H5T_NATIVE_UINT8)
+    h5t_set_precision(bool_type, 1)
+    return bool_type
+end
+
 function __init__()
     # Ensure this is reinitialized on using
     libhdf5handle[] = dlopen(libhdf5)

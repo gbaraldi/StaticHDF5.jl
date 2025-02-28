@@ -541,6 +541,7 @@ const H5T_C_S1            = _read_const(:H5T_C_S1_g)
 const H5T_STD_REF_OBJ     = _read_const(:H5T_STD_REF_OBJ_g)
 const H5T_STD_REF_DSETREG = _read_const(:H5T_STD_REF_DSETREG_g)
 # Native types
+const H5T_NATIVE_HBOOL  = _read_const(:H5T_NATIVE_HBOOL_g)
 const H5T_NATIVE_B8     = _read_const(:H5T_NATIVE_B8_g)
 const H5T_NATIVE_INT8   = _read_const(:H5T_NATIVE_INT8_g)
 const H5T_NATIVE_UINT8  = _read_const(:H5T_NATIVE_UINT8_g)
@@ -554,6 +555,8 @@ const H5T_NATIVE_FLOAT  = _read_const(:H5T_NATIVE_FLOAT_g)
 const H5T_NATIVE_DOUBLE = _read_const(:H5T_NATIVE_DOUBLE_g)
 # Other type constants
 const H5T_VARIABLE = reinterpret(UInt, -1)
+
+JL_BOOL_TYPE::hid_t = -1
 
 # Filter constants
 const H5Z_FLAG_MANDATORY = 0x0000
