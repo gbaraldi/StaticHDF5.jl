@@ -1,3 +1,6 @@
+<!-- [![Build Status](https://github.com/gbaraldi/SimpleHDF5.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/gbaraldi/SimpleHDF5.jl/actions/workflows/CI.yml?query=branch%3Amain) -->
+[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://gbaraldi.github.io/SimpleHDF5.jl/dev/)
+
 # SimpleHDF5
 
 A simple, lightweight Julia interface to HDF5 files focused on array operations.
