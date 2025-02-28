@@ -1,0 +1,22 @@
+name = "SimpleHDF5"
+uuid = "391cb0f8-ad7e-4019-b821-cbf923e2cb8f"
+authors = ["gbaraldi <baraldigabriel@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+HDF5_jll = "0234f1f7-429e-5d53-9886-15a909be8d59"
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+Preferences = "21216c6a-2e73-6563-6e65-726566657250"
+
+[compat]
+HDF5_jll = "1.14.5"
+Libdl = "1.11.0"
+Preferences = "1.4.3"
+
+[extras]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test", "BenchmarkTools", "JET"]
