@@ -118,17 +118,18 @@ write_array(file_id, "matrix", rand(10, 10))
 close_file(file_id)
 ```
 """
-function write_array(file_id::API.hid_t, dataset_name::String, data::AbstractArray{T}) where T
+function write_array(file_id::API.hid_t, dataset_name::String, data::AbstractArray)
     # Convert to regular Array if it's not already one
-    array_data = Array(data)
+    return write_array(file_id, dataset_name, Array(data)::Array)
+end
 
-    dims = size(array_data)
-    rank = length(dims)
+function write_array(file_id::API.hid_t, dataset_name::String, @nospecialize(data::Array))
+    rank = length(size(data))
+    dims = _convert(Vector{Int}, size(data))
 
-    dims_hsize_t = [reverse(dims)]  # HDF5 uses C ordering (last dimension varies fastest)
-    dataspace_id = API.h5s_create_simple(rank, dims_hsize_t, C_NULL)
-
-    datatype_id = _get_h5_datatype(T)
+    reverse!(dims)  # HDF5 uses C ordering (last dimension varies fastest)
+    dataspace_id = API.h5s_create_simple(rank, dims, C_NULL)
+    datatype_id = _get_h5_datatype(eltype(data))
 
     # Create dataset
     dataset_id = API.h5d_create(
@@ -148,7 +149,7 @@ function write_array(file_id::API.hid_t, dataset_name::String, data::AbstractArr
         API.H5S_ALL,
         API.H5S_ALL,
         API.H5P_DEFAULT,
-        array_data
+        data
     )
 
     # Clean up
@@ -348,56 +349,48 @@ function list_datasets(file_id::API.hid_t, path::String="/")
     return datasets
 end
 
+# Type-stable conversion for NTuple -> Vector
+function _convert(::Type{Vector{T}}, @nospecialize(tup::NTuple{N,U} where N)) where {T,U}
+    N = length(tup)
+    v = Vector{T}(undef, N)
+    for i = 1:N
+        if T === U
+            v[i] = tup[i]
+        else
+            v[i] = Base.convert(T, tup[i])
+        end
+    end
+    return v
+ end
+
 # Helper function to get HDF5 datatype from Julia type
-function _get_h5_datatype(::Type{Float64})
-    return API.h5t_copy(API.H5T_NATIVE_DOUBLE)
-end
-
-function _get_h5_datatype(::Type{Float32})
-    return API.h5t_copy(API.H5T_NATIVE_FLOAT)
-end
-
-function _get_h5_datatype(::Type{Int64})
-    return API.h5t_copy(API.H5T_NATIVE_INT64)
-end
-
-function _get_h5_datatype(::Type{Int32})
-    return API.h5t_copy(API.H5T_NATIVE_INT32)
-end
-
-function _get_h5_datatype(::Type{Int16})
-    return API.h5t_copy(API.H5T_NATIVE_INT16)
-end
-
-function _get_h5_datatype(::Type{Int8})
-    return API.h5t_copy(API.H5T_NATIVE_INT8)
-end
-
-function _get_h5_datatype(::Type{UInt64})
-    return API.h5t_copy(API.H5T_NATIVE_UINT64)
-end
-
-function _get_h5_datatype(::Type{UInt32})
-    return API.h5t_copy(API.H5T_NATIVE_UINT32)
-end
-
-function _get_h5_datatype(::Type{UInt16})
-    return API.h5t_copy(API.H5T_NATIVE_UINT16)
-end
-
-function _get_h5_datatype(::Type{UInt8})
-    return API.h5t_copy(API.H5T_NATIVE_UINT8)
-end
-
-function bool_type()
-    # Encode Bool as bitfield (UInt8-based) with precision 1
-    bool_type = API.h5t_copy(API.H5T_NATIVE_B8)
-    API.h5t_set_precision(bool_type, 1)
-    return bool_type
-end
-
-function _get_h5_datatype(::Type{Bool})
-    return bool_type()
+function _get_h5_datatype(@nospecialize(T::Type))
+    if T === Float64
+        return API.h5t_copy(API.H5T_NATIVE_DOUBLE)
+    elseif T === Float32
+        return API.h5t_copy(API.H5T_NATIVE_FLOAT)
+    elseif T === Int64
+        return API.h5t_copy(API.H5T_NATIVE_INT64)
+    elseif T === Int32
+        return API.h5t_copy(API.H5T_NATIVE_INT32)
+    elseif T === Int16
+        return API.h5t_copy(API.H5T_NATIVE_INT16)
+    elseif T === Int8
+        return API.h5t_copy(API.H5T_NATIVE_INT8)
+    elseif T === UInt64
+        return API.h5t_copy(API.H5T_NATIVE_UINT64)
+    elseif T === UInt32
+        return API.h5t_copy(API.H5T_NATIVE_UINT32)
+    elseif T === UInt16
+        return API.h5t_copy(API.H5T_NATIVE_UINT16)
+    elseif T === UInt8
+        return API.h5t_copy(API.H5T_NATIVE_UINT8)
+    elseif T === Bool
+        # Encode Bool as bitfield (UInt8-based) with precision 1
+        bool_type = API.h5t_copy(API.H5T_NATIVE_B8)
+        API.h5t_set_precision(bool_type, 1)
+        return bool_type
+    else @assert false "unsupported datatype" end
 end
 
 function _get_julia_type(datatype_id::API.hid_t)

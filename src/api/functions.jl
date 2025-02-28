@@ -924,7 +924,7 @@ end
 
 See `libhdf5` documentation for [`H5Dwrite`](https://docs.hdfgroup.org/hdf5/v1_14/group___h5_d.html#ga98f44998b67587662af8b0d8a0a75906).
 """
-function h5d_write(dataset_id, mem_type_id, mem_space_id, file_space_id, xfer_plist_id, buf)
+function h5d_write(dataset_id, mem_type_id, mem_space_id, file_space_id, xfer_plist_id, @nospecialize(buf::Array))
     lock(liblock)
     var"#status#" = try
             ccall((:H5Dwrite, libhdf5), herr_t, (hid_t, hid_t, hid_t, hid_t, hid_t, Ptr{Cvoid}), dataset_id, mem_type_id, mem_space_id, file_space_id, xfer_plist_id, buf)
