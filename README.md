@@ -75,4 +75,3 @@ For --trim use SimpleHDF5 has a way to pass in the expected return type, this ma
    ```
 
 The standard version of `read_array` without the return type is not stable because it's not possible to know what kind of array is in the file
-
