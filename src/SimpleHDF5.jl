@@ -229,7 +229,7 @@ function read_array(file_id::API.hid_t, dataset_name::String, ::Type{Array{T,N}}
     dims = Vector{API.hsize_t}(undef, rank)
     API.h5s_get_simple_extent_dims(dataspace_id, dims, C_NULL)
     if length(dims) != N
-        throw(API.H5Error("Dimension mismatch: expected $N-dimensional array, got $(length(dims))-dimensional array"))
+        throw(ArgumentError("Dimension mismatch: expected $N-dimensional array, got $(length(dims))-dimensional array"))
     end
     data = Array{T}(undef, reverse(ntuple(i -> dims[i], N)))
 
@@ -242,7 +242,7 @@ function read_array(file_id::API.hid_t, dataset_name::String, ::Type{Array{T,N}}
         API.h5t_close(stored_datatype_id)
         API.h5s_close(dataspace_id)
         API.h5d_close(dataset_id)
-        throw(API.H5Error("Type mismatch: requested type $T is not the stored type $stored_julia_type"))
+        throw(ArgumentError("Type mismatch: requested type $T is not the stored type $stored_julia_type"))
     end
 
     # Read data
