@@ -231,7 +231,7 @@ function read_array(file_id::API.hid_t, dataset_name::String, ::Type{Array{T,N}}
     if length(dims) != N
         throw(API.H5Error("Dimension mismatch: expected $N-dimensional array, got $(length(dims))-dimensional array"))
     end
-    data = Array{T}(undef, ntuple(i -> dims[i], N))
+    data = Array{T}(undef, reverse(ntuple(i -> dims[i], N)))
 
     # Get stored datatype for type checking
     stored_datatype_id = API.h5d_get_type(dataset_id)
@@ -391,8 +391,8 @@ end
 
 # Bool is a mess in HDF5, we use a UInt8 with precision 1
 function bool_type()
-    bool_type = h5t_copy(API.H5T_NATIVE_UINT8)
-    h5t_set_precision(bool_type, 1)
+    bool_type = API.h5t_copy(API.H5T_NATIVE_UINT8)
+    API.h5t_set_precision(bool_type, 1)
     return bool_type
 end
 
