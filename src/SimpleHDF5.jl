@@ -389,9 +389,9 @@ function _get_h5_datatype(::Type{UInt8})
     return API.h5t_copy(API.H5T_NATIVE_UINT8)
 end
 
-# Bool is a mess in HDF5, we use a UInt8 with precision 1
 function bool_type()
-    bool_type = API.h5t_copy(API.H5T_NATIVE_UINT8)
+    # Encode Bool as bitfield (UInt8-based) with precision 1
+    bool_type = API.h5t_copy(API.H5T_NATIVE_B8)
     API.h5t_set_precision(bool_type, 1)
     return bool_type
 end
@@ -426,9 +426,6 @@ function _get_julia_type(datatype_id::API.hid_t)
             end
         else
             if size == 1
-                if API.h5t_get_precision(datatype_id) == 1
-                    return Bool
-                end
                 return UInt8
             elseif size == 2
                 return UInt16
@@ -454,6 +451,9 @@ function _get_julia_type(datatype_id::API.hid_t)
     elseif class == API.H5T_BITFIELD
         size = API.h5t_get_size(datatype_id)
         if size == 1
+            if API.h5t_get_precision(datatype_id) == 1
+                return Bool
+            end
             return UInt8
         elseif size == 2
             return UInt16
