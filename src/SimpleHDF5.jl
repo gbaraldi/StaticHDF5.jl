@@ -227,7 +227,7 @@ function read_array(file_id::API.hid_t, dataset_name::String, ::Type{Array{T,N}}
 
     rank = API.h5s_get_simple_extent_ndims(dataspace_id)
     dims = Vector{API.hsize_t}(undef, rank)
-    API.h5s_get_simple_extent_dims(dataspace_id, dims_out, C_NULL)
+    API.h5s_get_simple_extent_dims(dataspace_id, dims, C_NULL)
     if length(dims) != N
         throw(API.H5Error("Dimension mismatch: expected $N-dimensional array, got $(length(dims))-dimensional array"))
     end
