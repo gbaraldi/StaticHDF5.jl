@@ -129,7 +129,7 @@ function write_array(file_id::API.hid_t, dataset_name::String, @nospecialize(dat
 
     reverse!(dims)  # HDF5 uses C ordering (last dimension varies fastest)
     dataspace_id = API.h5s_create_simple(rank, dims, C_NULL)
-    datatype_id = _get_h5_datatype(eltype(data))
+    datatype_id = _get_h5_datatype(eltype(data)::Type)
 
     # Create dataset
     dataset_id = API.h5d_create(
