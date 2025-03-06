@@ -146,7 +146,7 @@ using JET
 
         # Test error cases
         # Trying to read a vector as a matrix should throw an error
-        @test_throws SimpleHDF5.API.H5Error SimpleHDF5.read_array(file_id, "vector", Matrix{Int})
+        @test_throws ArgumentError SimpleHDF5.read_array(file_id, "vector", Matrix{Int})
 
         # Close the file
         SimpleHDF5.close_file(file_id)
