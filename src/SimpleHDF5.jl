@@ -446,8 +446,8 @@ function _get_julia_type(datatype_id::API.hid_t)
         elseif size == 8
             return Float64
         end
-    elseif class == API.H5T_STRING
-        return String
+    # elseif class == API.H5T_STRING
+    #     return String # This is not how Strings work
     elseif class == API.H5T_BITFIELD
         size = API.h5t_get_size(datatype_id)
         if size == 1
