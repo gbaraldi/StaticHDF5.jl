@@ -37,8 +37,7 @@ using HDF5
             @test read(file["array_1d"]) == test_array_1d
             @test read(file["array_2d"]) == test_array_2d
             @test read(file["array_3d"]) == test_array_3d
-            # Bool is not compatible with HDF5.jl
-            # @test read(file["array_bool"]) == test_array_bool
+            @test read(file["array_bool"]) == test_array_bool
 
             # Test reading from group
             @test read(file["group1/nested_array"]) == test_array_2d
