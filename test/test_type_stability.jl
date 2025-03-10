@@ -35,6 +35,9 @@ using JET
         JET.@test_opt write_array(file_id, "float_array", float_array)
         JET.@test_opt write_array(file_id, "bool_array", bool_array)
 
+        # write_array should be optimized even with an unknown array type
+        JET.test_opt(write_array, (typeof(file_id), String, Array))
+
         # Actually write the arrays for subsequent tests
         write_array(file_id, "int_array", int_array)
         write_array(file_id, "float_array", float_array)
