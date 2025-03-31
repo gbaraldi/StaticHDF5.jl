@@ -1,4 +1,4 @@
-The SimpleHDF5.jl package is licensed under the MIT License:
+The StaticHDF5.jl package is licensed under the MIT License:
 
 > Copyright (c) 2025 JuliaHub, Inc. and contributors
 >

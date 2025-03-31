@@ -1,13 +1,13 @@
 #!/usr/bin/env julia
 
 using Test
-using SimpleHDF5
+using StaticHDF5
 using HDF5
 
 @testset "HDF5.jl Integration Tests" begin
 
-    @testset "SimpleHDF5 -> HDF5.jl" begin
-        # Create a file with SimpleHDF5
+    @testset "StaticHDF5 -> HDF5.jl" begin
+        # Create a file with StaticHDF5
         tmpdir = mktempdir()
         test_file = joinpath(tmpdir, "simple_to_hdf5jl.h5")
 
@@ -17,7 +17,7 @@ using HDF5
         test_array_3d = reshape(collect(1:24), 2, 3, 4)
         test_array_bool = [true, false, true, false, true]
 
-        # Write data using SimpleHDF5
+        # Write data using StaticHDF5
         file_id = create_file(test_file)
         write_array(file_id, "array_1d", test_array_1d)
         write_array(file_id, "array_2d", test_array_2d)
@@ -25,7 +25,7 @@ using HDF5
         write_array(file_id, "array_bool", test_array_bool)
 
         # Create a group and write data to it
-        group_id = SimpleHDF5.create_group(file_id, "group1")
+        group_id = StaticHDF5.create_group(file_id, "group1")
         write_array(group_id, "nested_array", test_array_2d)
         close_group(group_id)
 
@@ -55,7 +55,7 @@ using HDF5
         end
     end
 
-    @testset "HDF5.jl -> SimpleHDF5" begin
+    @testset "HDF5.jl -> StaticHDF5" begin
         # Create a file with HDF5.jl
         tmpdir = mktempdir()
         test_file = joinpath(tmpdir, "hdf5jl_to_simple.h5")
@@ -72,12 +72,12 @@ using HDF5
             file["float_array_2d"] = test_array_2d
             file["int_array_3d"] = test_array_3d
             file["bool_array"] = test_array_bool
-            # Avoid conflict with SimpleHDF5.create_group
+            # Avoid conflict with StaticHDF5.create_group
             g = HDF5.create_group(file, "group1")
             g["nested_array"] = test_array_2d
         end
 
-        # Now read the file with SimpleHDF5
+        # Now read the file with StaticHDF5
         file_id = open_file(test_file)
 
         # Test reading arrays

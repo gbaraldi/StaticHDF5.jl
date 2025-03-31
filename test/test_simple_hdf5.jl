@@ -2,12 +2,12 @@
 
 using Test
 
-# Add the parent directory to the load path and include the SimpleHDF5 module
-using SimpleHDF5
+# Add the parent directory to the load path and include the StaticHDF5 module
+using StaticHDF5
 
 # Helper function to clean up test files
 
-@testset "SimpleHDF5 Tests" begin
+@testset "StaticHDF5 Tests" begin
 
     @testset "File Operations" begin
         # Test file creation
@@ -28,7 +28,7 @@ using SimpleHDF5
         close_file(file_id)
 
         # Test error handling for non-existent file
-        @test_throws SimpleHDF5.API.H5Error open_file("nonexistent_file.h5")
+        @test_throws StaticHDF5.API.H5Error open_file("nonexistent_file.h5")
     end
 
     @testset "Basic Array Operations" begin
@@ -92,12 +92,12 @@ using SimpleHDF5
         file_id = open_file(joinpath(tmpdir, "test_file.h5"))
 
         # Read from main group
-        group_id = SimpleHDF5.API.h5g_open(file_id, "group1", SimpleHDF5.API.H5P_DEFAULT)
+        group_id = StaticHDF5.API.h5g_open(file_id, "group1", StaticHDF5.API.H5P_DEFAULT)
         read_array_group = read_array(group_id, "data")
         @test read_array_group ≈ test_array
 
         # Read from subgroup
-        subgroup_id = SimpleHDF5.API.h5g_open(group_id, "subgroup", SimpleHDF5.API.H5P_DEFAULT)
+        subgroup_id = StaticHDF5.API.h5g_open(group_id, "subgroup", StaticHDF5.API.H5P_DEFAULT)
         read_array_subgroup = read_array(subgroup_id, "subdata")
         @test read_array_subgroup ≈ test_subarray
 
@@ -217,7 +217,7 @@ using SimpleHDF5
 
         # Test reading non-existent dataset
         file_id = open_file(joinpath(tmpdir, "test_file.h5"))
-        @test_throws SimpleHDF5.API.H5Error read_array(file_id, "nonexistent")
+        @test_throws StaticHDF5.API.H5Error read_array(file_id, "nonexistent")
         close_file(file_id)
 
         # This might not fail in all cases due to type conversion, but worth testing

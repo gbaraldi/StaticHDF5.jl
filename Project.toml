@@ -1,4 +1,4 @@
-name = "SimpleHDF5"
+name = "StaticHDF5"
 uuid = "391cb0f8-ad7e-4019-b821-cbf923e2cb8f"
 authors = ["gbaraldi <baraldigabriel@gmail.com>"]
 version = "0.1.0"
