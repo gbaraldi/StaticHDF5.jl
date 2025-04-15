@@ -1,5 +1,5 @@
 using Test
-using SimpleHDF5
+using StaticHDF5
 
 include("test_simple_hdf5.jl")
 include("test_edge_cases.jl")

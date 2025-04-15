@@ -1,4 +1,4 @@
-module SimpleHDF5
+module StaticHDF5
 
 export open_file, create_file, close_file
 export write_array, read_array
@@ -465,4 +465,4 @@ end
 
 
 
-end # module SimpleHDF5
+end # module StaticHDF5

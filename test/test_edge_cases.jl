@@ -2,10 +2,10 @@
 
 using Test
 
-using SimpleHDF5
+using StaticHDF5
 
 
-@testset "SimpleHDF5 Advanced Tests" begin
+@testset "StaticHDF5 Advanced Tests" begin
 
     @testset "Edge Cases" begin
         tmpdir = mktempdir()
@@ -77,7 +77,7 @@ using SimpleHDF5
         new_data = [10, 20, 30, 40, 50]
 
         # This should fail because dataset already exists
-        @test_throws SimpleHDF5.API.H5Error write_array(file_id, "data", new_data)
+        @test_throws StaticHDF5.API.H5Error write_array(file_id, "data", new_data)
 
         # Workaround: we need to delete and recreate
         # For now, we'll just close and reopen with truncate

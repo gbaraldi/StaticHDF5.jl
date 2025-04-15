@@ -1,7 +1,7 @@
-<!-- [![Build Status](https://github.com/gbaraldi/SimpleHDF5.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/gbaraldi/SimpleHDF5.jl/actions/workflows/CI.yml?query=branch%3Amain) -->
-[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://gbaraldi.github.io/SimpleHDF5.jl/dev/)
+<!-- [![Build Status](https://github.com/gbaraldi/StaticHDF5.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/gbaraldi/StaticHDF5.jl/actions/workflows/CI.yml?query=branch%3Amain) -->
+[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://gbaraldi.github.io/StaticHDF5.jl/dev/)
 
-# SimpleHDF5
+# StaticHDF5
 
 A simple, lightweight Julia interface to HDF5 files focused on array operations.
 It's main goal is to support juliac
@@ -17,13 +17,13 @@ It's main goal is to support juliac
 
 ```julia
 using Pkg
-Pkg.add("SimpleHDF5")
+Pkg.add("StaticHDF5")
 ```
 
 ## Basic Usage
 
 ```julia
-using SimpleHDF5
+using StaticHDF5
 
 # Create a file and write some arrays
 file_id = create_file("example.h5")
@@ -53,14 +53,14 @@ subgroup_id = create_group(group_id, "day1")
 write_array(subgroup_id, "morning", [20.1, 20.5, 21.0])
 
 # Close groups and file
-SimpleHDF5.API.h5g_close(subgroup_id)
-SimpleHDF5.API.h5g_close(group_id)
+StaticHDF5.API.h5g_close(subgroup_id)
+StaticHDF5.API.h5g_close(group_id)
 close_file(file_id)
 ```
 
 ## Type-Stable Reading
 
-For --trim use SimpleHDF5 has a way to pass in the expected return type, this makes it type stable
+For --trim use StaticHDF5 has a way to pass in the expected return type, this makes it type stable
 
 1. **Using parametric array types** (recommended):
    ```julia
@@ -75,3 +75,7 @@ For --trim use SimpleHDF5 has a way to pass in the expected return type, this ma
    ```
 
 The standard version of `read_array` without the return type is not stable because it's not possible to know what kind of array is in the file
+
+## Differences from HDF5.jl
+
+Firstly we would like to thank the HDF5.jl developers for making such a featureful and powerful package. The goal for StaticHDF5.jl is not to replace it, but to have an interface that is compatible with trimming. This means cutting down on some of the features and also forcing the user to be explicit about the type they expect to load out of the hdf5 file.
