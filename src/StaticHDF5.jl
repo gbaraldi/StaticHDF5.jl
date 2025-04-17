@@ -2,7 +2,7 @@ module StaticHDF5
 
 export open_file, create_file, close_file
 export write_array, read_array
-export create_group, close_group, list_datasets
+export open_group, create_group, close_group, list_objects
 export get_array_info
 export READ_ONLY, READ_WRITE, CREATE  # Export the constants
 
@@ -14,9 +14,31 @@ const READ_ONLY = API.H5F_ACC_RDONLY
 const READ_WRITE = API.H5F_ACC_RDWR
 const CREATE = API.H5F_ACC_TRUNC
 
+abstract type HDF5Object end
 
 """
-    open_file(filename::String, mode::Integer=READ_ONLY) -> hid_t
+    HDF5File
+
+A handle to an HDF5 file.
+"""
+struct HDF5File <: HDF5Object
+    file_id::API.hid_t
+end
+
+"""
+    HDF5Group
+
+A handle to an HDF5 group.
+"""
+struct HDF5Group <: HDF5Object
+    group_id::API.hid_t
+end
+
+get_hid(obj::HDF5File) = obj.file_id
+get_hid(obj::HDF5Group) = obj.group_id
+
+"""
+    open_file(filename::String, mode::Integer=READ_ONLY) -> HDF5File
 
 Open an HDF5 file with the specified access mode.
 Returns a file identifier that should be closed with `close_file`.
@@ -27,18 +49,18 @@ Returns a file identifier that should be closed with `close_file`.
 
 # Example
 ```julia
-file_id = open_file("data.h5")
+file = open_file("data.h5")
 # ... operations on file ...
-close_file(file_id)
+close_file(file)
 ```
 """
 function open_file(filename::String, mode::Integer=READ_ONLY)
     file_id = API.h5f_open(filename, mode, API.H5P_DEFAULT)
-    return file_id
+    return HDF5File(file_id)
 end
 
 """
-    create_file(filename::String, mode::Integer=CREATE) -> hid_t
+    create_file(filename::String, mode::Integer=CREATE) -> HDF5File
 
 Create a new HDF5 file.
 Returns a file identifier that should be closed with `close_file`.
@@ -49,81 +71,112 @@ Returns a file identifier that should be closed with `close_file`.
 
 # Example
 ```julia
-file_id = create_file("new_data.h5")
+file = create_file("new_data.h5")
 # ... operations on file ...
-close_file(file_id)
+close_file(file)
 ```
 """
 function create_file(filename::String, mode::Integer=CREATE)
     file_id = API.h5f_create(filename, mode, API.H5P_DEFAULT, API.H5P_DEFAULT)
-    return file_id
+    return HDF5File(file_id)
 end
 
 """
-    close_file(file_id::hid_t)
+    close_file(file::HDF5File)
 
 Close an HDF5 file.
 
 # Arguments
-- `file_id`: File identifier returned by `open_file` or `create_file`
+- `file`: File identifier returned by `open_file` or `create_file`
 """
-function close_file(file_id::API.hid_t)
-    API.h5f_close(file_id)
+function close_file(file::HDF5File)
+    API.h5f_close(get_hid(file))
     return nothing
 end
 
 """
-    create_group(file_id::hid_t, group_name::String) -> hid_t
+    create_group(object::HDF5Object, group_name::String) -> HDF5Group
 
 Create a new group in the HDF5 file.
-Returns a group identifier that should be closed with `API.h5g_close`.
+Returns a group identifier that should be closed with `close_group`.
 
 # Arguments
-- `file_id`: File identifier
+- `object`: HDF5 object (file, group)
 - `group_name`: Name of the group to create
 
 # Example
 ```julia
-file_id = create_file("data.h5")
-group_id = create_group(file_id, "measurements")
+file = create_file("data.h5")
+group = create_group(file, "measurements")
 # ... operations on group ...
-close_group(group_id)
-close_file(file_id)
+close_group(group)
+close_file(file)
 ```
 """
-function create_group(file_id::API.hid_t, group_name::String)
-    group_id = API.h5g_create(file_id, group_name, API.H5P_DEFAULT, API.H5P_DEFAULT, API.H5P_DEFAULT)
-    return group_id
+function create_group(file::HDF5Object, group_name::String)
+    group_id = API.h5g_create(get_hid(file), group_name, API.H5P_DEFAULT, API.H5P_DEFAULT, API.H5P_DEFAULT)
+    return HDF5Group(group_id)
 end
 
-function close_group(group_id::API.hid_t)
-    API.h5g_close(group_id)
+"""
+    open_group(file::HDF5Object, group_name::String) -> HDF5Group
+
+Open an existing group in the HDF5 file.
+Returns a group identifier that should be closed with `close_group`.
+
+# Arguments
+- `object`: HDF5 object (file, group)
+- `group_name`: Name of the group to open
+
+# Example
+```julia
+group = open_group(file, "measurements")
+# ... operations on group ...
+close_group(group)
+```
+"""
+function open_group(file::HDF5Object, group_name::String)
+    group_id = API.h5g_open(get_hid(file), group_name, API.H5P_DEFAULT)
+    return HDF5Group(group_id)
+end
+
+"""
+    close_group(group::HDF5Group)
+
+Close an HDF5 group.
+
+# Arguments
+- `group`: Group identifier returned by `create_group`
+"""
+function close_group(group::HDF5Group)
+    API.h5g_close(get_hid(group))
     return nothing
 end
 
 """
-    write_array(file_id::hid_t, dataset_name::String, data::AbstractArray{T}) where T
+    write_array(object::HDF5Object, dataset_name::String, data::AbstractArray{T}) where T
 
-Write an array to an HDF5 file.
+Write an array to an HDF5 object.
 
+This converts to a regular Array before writing.
 # Arguments
-- `file_id`: File identifier
+- `object`: HDF5 object (file, group, or dataset)
 - `dataset_name`: Name of the dataset to create
 - `data`: Array to write
 
 # Example
 ```julia
-file_id = create_file("data.h5")
-write_array(file_id, "matrix", rand(10, 10))
-close_file(file_id)
+file = create_file("data.h5")
+write_array(file, "matrix", rand(10, 10))
+close_file(file)
 ```
 """
-function write_array(file_id::API.hid_t, dataset_name::String, data::AbstractArray)
+function write_array(object::HDF5Object, dataset_name::String, data::AbstractArray)
     # Convert to regular Array if it's not already one
-    return write_array(file_id, dataset_name, Array(data)::Array)
+    return write_array(object, dataset_name, Array(data)::Array)
 end
 
-function write_array(file_id::API.hid_t, dataset_name::String, @nospecialize(data::Array))
+function write_array(object::HDF5Object, dataset_name::String, @nospecialize(data::Array))
     rank = length(size(data))
     dims = _convert(Vector{Int}, size(data))
 
@@ -133,7 +186,7 @@ function write_array(file_id::API.hid_t, dataset_name::String, @nospecialize(dat
 
     # Create dataset
     dataset_id = API.h5d_create(
-        file_id,
+        get_hid(object),
         dataset_name,
         datatype_id,
         dataspace_id,
@@ -161,13 +214,13 @@ function write_array(file_id::API.hid_t, dataset_name::String, @nospecialize(dat
 end
 
 """
-    get_array_info(file_id::hid_t, dataset_name::String) -> (Type, Tuple)
+    get_array_info(object::HDF5Object, dataset_name::String) -> (Type, Tuple)
 
 Get information about an array stored in an HDF5 file.
 Returns a tuple containing the element type and dimensions of the array.
 
 # Arguments
-- `file_id`: File identifier
+- `object`: HDF5 object (file, group)
 - `dataset_name`: Name of the dataset to get information about
 
 # Example
@@ -177,8 +230,8 @@ elem_type, dims = get_array_info(file_id, "matrix")
 close_file(file_id)
 ```
 """
-function get_array_info(file_id::API.hid_t, dataset_name::String)
-    dataset_id = API.h5d_open(file_id, dataset_name, API.H5P_DEFAULT)
+function get_array_info(object::HDF5Object, dataset_name::String)
+    dataset_id = API.h5d_open(get_hid(object), dataset_name, API.H5P_DEFAULT)
     dataspace_id = API.h5d_get_space(dataset_id)
 
     rank = API.h5s_get_simple_extent_ndims(dataspace_id)
@@ -200,13 +253,13 @@ function get_array_info(file_id::API.hid_t, dataset_name::String)
 end
 
 """
-    read_array(file_id::hid_t, dataset_name::String, ::Type{Array{T,N}}) where {T,N}
+    read_array(object::HDF5Object, dataset_name::String, ::Type{Array{T,N}}) where {T,N}
 
 Read an array from an HDF5 file with a specified array type.
 This version ensures type stability by pre-specifying both the element type and dimensionality.
 
 # Arguments
-- `file_id`: File identifier
+- `object`: HDF5 object (file, group)
 - `dataset_name`: Name of the dataset to read
 - `Array{T,N}`: The array type to read (e.g., Vector{Float64}, Matrix{Int}, Array{Float32,3}, etc.)
 
@@ -222,8 +275,8 @@ close_file(file_id)
 # Notes
 Throws an error if the actual dimensions don't match the expected dimensionality.
 """
-function read_array(file_id::API.hid_t, dataset_name::String, ::Type{Array{T,N}}) where {T,N}
-    dataset_id = API.h5d_open(file_id, dataset_name, API.H5P_DEFAULT)
+function read_array(object::HDF5Object, dataset_name::String, ::Type{Array{T,N}}) where {T,N}
+    dataset_id = API.h5d_open(get_hid(object), dataset_name, API.H5P_DEFAULT)
     dataspace_id = API.h5d_get_space(dataset_id)
 
     rank = API.h5s_get_simple_extent_ndims(dataspace_id)
@@ -265,15 +318,14 @@ function read_array(file_id::API.hid_t, dataset_name::String, ::Type{Array{T,N}}
 end
 
 """
-    read_array(file_id::hid_t, dataset_name::String) where {T,N}
+    read_array(object::HDF5Object, dataset_name::String) where {T,N}
 
 Read an array from an HDF5 file with a specified array type.
 This infers the array dimensions from the file so it's not type stable
 
 # Arguments
-- `file_id`: File identifier
+- `object`: HDF5 object (file, group, or dataset)
 - `dataset_name`: Name of the dataset to read
-- `Array{T,N}`: The array type to read (e.g., Vector{Float64}, Matrix{Int}, Array{Float32,3}, etc.)
 
 # Example
 ```julia
@@ -282,33 +334,43 @@ data = read_array(file_id, "vector")  # For 1D arrays
 close_file(file_id)
 ```
 """
-function read_array(file_id::API.hid_t, dataset_name::String)
-    elem_type, dims = get_array_info(file_id, dataset_name)
-    return read_array(file_id, dataset_name, Array{elem_type, length(dims)})
+function read_array(object::HDF5Object, dataset_name::String)
+    elem_type, dims = get_array_info(object, dataset_name)
+    return read_array(object, dataset_name, Array{elem_type, length(dims)})
 end
 
 """
-    list_datasets(file_id::hid_t, path::String="/") -> Vector{String}
+    list_objects(object::HDF5Object, path::String="/") -> Vector{String}
 
-List all datasets in a file or group.
+List all objects in a file or group.
 
 # Arguments
-- `file_id`: File identifier
+- `object`: HDF5 object (file, group, or dataset)
 - `path`: Path to the group (default: root group)
 
 # Example
 ```julia
 file_id = open_file("data.h5")
-datasets = list_datasets(file_id)
+objects = list_objects(file_id)
 close_file(file_id)
 ```
 """
-function list_datasets(file_id::API.hid_t, path::String="/")
-    # Open the group
-    group_id = if path == "/"
-        API.h5g_open(file_id, "/", API.H5P_DEFAULT)
+function list_objects(object::HDF5Object, path::String="/")
+    should_close = false
+    if isa(object, HDF5File)
+        # Open the group
+        group_id = API.h5g_open(get_hid(object), path, API.H5P_DEFAULT)
+        should_close = true
+    elseif isa(object, HDF5Group)
+        # Open the group
+        group_id = if path == "/" # Just use the group id if we're at the root
+            get_hid(object)
+        else
+            API.h5g_open(get_hid(object), path, API.H5P_DEFAULT)
+            should_close = true
+        end
     else
-        API.h5g_open(file_id, path, API.H5P_DEFAULT)
+        error("Unsupported object type: $(typeof(object))")
     end
 
     # Get the number of objects in the group
@@ -316,12 +378,12 @@ function list_datasets(file_id::API.hid_t, path::String="/")
     API.h5g_get_info(group_id, info)
     n_objs = info[].nlinks
 
-    datasets = String[]
+    objects = String[]
 
     # If there are no objects, return empty array
     if n_objs == 0
         API.h5g_close(group_id)
-        return datasets
+        return objects
     end
 
     # Iterate through objects
@@ -336,18 +398,32 @@ function list_datasets(file_id::API.hid_t, path::String="/")
         obj_id = API.h5o_open(group_id, name, API.H5P_DEFAULT)
         obj_type = API.h5i_get_type(obj_id)
 
-        # If it's a dataset, add to the list
-        if obj_type == API.H5I_DATASET
-            push!(datasets, name)
-        end
+        push!(objects, name)
 
         API.h5o_close(obj_id)
     end
 
-    API.h5g_close(group_id)
+    if should_close
+        API.h5g_close(group_id)
+    end
 
-    return datasets
+    return objects
 end
+"""
+    keys(object::HDF5Object) -> Vector{String}
+
+List all objects in a file or group.
+
+# Arguments
+- `object`: HDF5 object (file, group)
+# Example
+```julia
+file_id = open_file("data.h5")
+objects = keys(file_id)
+close_file(file_id)
+```
+"""
+Base.keys(object::HDF5Object) = list_objects(object)
 
 # Type-stable conversion for NTuple -> Vector
 function _convert(::Type{Vector{T}}, @nospecialize(tup::NTuple{N,U} where N)) where {T,U}
@@ -361,7 +437,7 @@ function _convert(::Type{Vector{T}}, @nospecialize(tup::NTuple{N,U} where N)) wh
         end
     end
     return v
- end
+end
 
 # Helper function to get HDF5 datatype from Julia type
 function _get_h5_datatype(@nospecialize(T::Type))

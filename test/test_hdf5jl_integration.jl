@@ -18,18 +18,18 @@ using HDF5
         test_array_bool = [true, false, true, false, true]
 
         # Write data using StaticHDF5
-        file_id = create_file(test_file)
-        write_array(file_id, "array_1d", test_array_1d)
-        write_array(file_id, "array_2d", test_array_2d)
-        write_array(file_id, "array_3d", test_array_3d)
-        write_array(file_id, "array_bool", test_array_bool)
+        file = create_file(test_file)
+        write_array(file, "array_1d", test_array_1d)
+        write_array(file, "array_2d", test_array_2d)
+        write_array(file, "array_3d", test_array_3d)
+        write_array(file, "array_bool", test_array_bool)
 
         # Create a group and write data to it
-        group_id = StaticHDF5.create_group(file_id, "group1")
-        write_array(group_id, "nested_array", test_array_2d)
-        close_group(group_id)
+        group = StaticHDF5.create_group(file, "group1")
+        write_array(group, "nested_array", test_array_2d)
+        close_group(group)
 
-        close_file(file_id)
+        close_file(file)
 
         # Now read the file with HDF5.jl
         h5open(test_file, "r") do file
@@ -78,14 +78,14 @@ using HDF5
         end
 
         # Now read the file with StaticHDF5
-        file_id = open_file(test_file)
+        file = open_file(test_file)
 
         # Test reading arrays
-        read_array_1d = read_array(file_id, "float_array_1d")
-        read_array_2d = read_array(file_id, "float_array_2d")
-        read_array_3d = read_array(file_id, "int_array_3d")
+        read_array_1d = read_array(file, "float_array_1d")
+        read_array_2d = read_array(file, "float_array_2d")
+        read_array_3d = read_array(file, "int_array_3d")
         # Bool is not compatible with HDF5.jl
-        # read_array_bool = read_array(file_id, "bool_array")
+        # read_array_bool = read_array(file, "bool_array")
 
         @test read_array_1d == test_array_1d
         @test read_array_2d == test_array_2d
@@ -93,13 +93,13 @@ using HDF5
         # Bool is not compatible with HDF5.jl
         # @test read_array_bool == test_array_bool
         # Test reading from group
-        nested_array = read_array(file_id, "group1/nested_array")
+        nested_array = read_array(file, "group1/nested_array")
         @test nested_array == test_array_2d
 
         # Test array info - get_array_info returns (type, dims) tuple
-        info_1d = get_array_info(file_id, "float_array_1d")
-        info_2d = get_array_info(file_id, "float_array_2d")
-        info_3d = get_array_info(file_id, "int_array_3d")
+        info_1d = get_array_info(file, "float_array_1d")
+        info_2d = get_array_info(file, "float_array_2d")
+        info_3d = get_array_info(file, "int_array_3d")
 
         # Check types (first element of tuple)
         @test info_1d[1] == Float32
@@ -111,6 +111,6 @@ using HDF5
         @test info_2d[2] == (3, 4)
         @test info_3d[2] == (2, 3, 4)
 
-        close_file(file_id)
+        close_file(file)
     end
 end
