@@ -4,7 +4,7 @@
 # StaticHDF5
 
 A simple, lightweight Julia interface to HDF5 files focused on array operations.
-It's main goal is to support juliac
+It's main goal is to support reading HDF5 files while respecting the --trim restrictions
 
 ## Features
 
@@ -26,41 +26,51 @@ Pkg.add("StaticHDF5")
 using StaticHDF5
 
 # Create a file and write some arrays
-file_id = create_file("example.h5")
-write_array(file_id, "integers", [1, 2, 3, 4, 5])
-write_array(file_id, "matrix", reshape(1:12, 3, 4))
-close_file(file_id)
+file = create_file("example.h5")
+write_array(file, "integers", [1, 2, 3, 4, 5])
+write_array(file, "matrix", reshape(1:12, 3, 4))
+close_file(file)
 
 # Read arrays back
-file_id = open_file("example.h5")
-integers = read_array(file_id, "integers", Vector{Int64})
-matrix = read_array(file_id, "matrix", Matrix{Int64})
-close_file(file_id)
+file = open_file("example.h5")
+integers = read_array(file, "integers")
+matrix = read_array(file, "matrix")
+close_file(file)
 ```
 
 ## Working with Groups
 
 ```julia
 # Create a file with groups
-file_id = create_file("grouped_example.h5")
+file = create_file("grouped_example.h5")
 
 # Create a group and write data to it
-group_id = create_group(file_id, "measurements")
-write_array(group_id, "temperatures", [22.1, 22.3, 22.0, 21.8])
+group = create_group(file, "measurements")
+write_array(group, "temperatures", [22.1, 22.3, 22.0, 21.8])
 
 # Create a subgroup
-subgroup_id = create_group(group_id, "day1")
-write_array(subgroup_id, "morning", [20.1, 20.5, 21.0])
+subgroup = create_group(group, "day1")
+write_array(subgroup, "morning", [20.1, 20.5, 21.0])
 
 # Close groups and file
-StaticHDF5.API.h5g_close(subgroup_id)
-StaticHDF5.API.h5g_close(group_id)
-close_file(file_id)
+close_group(subgroup)
+close_group(group)
+close_file(file)
+
+# Read from groups
+file = open_file("grouped_example.h5")
+group = open_group(file, "measurements")
+temperatures = read_array(group, "temperatures", Vector{Float64})
+subgroup = open_group(group, "day1")
+morning = read_array(subgroup, "morning", Vector{Float64})
+close_group(subgroup)
+close_group(group)
+close_file(file)
 ```
 
 ## Type-Stable Reading
 
-For --trim use StaticHDF5 has a way to pass in the expected return type, this makes it type stable
+For trimming, StaticHDF5 requires specifying the expected return type:
 
 1. **Using parametric array types** (recommended):
    ```julia
@@ -74,7 +84,26 @@ For --trim use StaticHDF5 has a way to pass in the expected return type, this ma
    tensor = read_array(file_id, "tensor", Array{Float32, 3})
    ```
 
-The standard version of `read_array` without the return type is not stable because it's not possible to know what kind of array is in the file
+The standard version of `read_array` without the return type is not type-stable because it's not possible to know what kind of array is in the file.
+
+## File Access Modes
+
+StaticHDF5 provides three file access modes:
+
+- `READ_ONLY`: Open an existing file for reading only
+- `READ_WRITE`: Open an existing file for reading and writing
+- `CREATE`: Create a new file (truncates if it exists)
+
+```julia
+# Open a file for reading only
+file = open_file("data.h5", READ_ONLY)
+
+# Open a file for reading and writing
+file = open_file("data.h5", READ_WRITE)
+
+# Create a new file
+file = create_file("new_data.h5", CREATE)
+```
 
 ## Differences from HDF5.jl
 
