@@ -25,7 +25,7 @@ function __init__()
     end
 
     # use our own error handling machinery (i.e. turn off automatic error printing)
-    h5e_set_auto(API.H5E_DEFAULT, C_NULL, C_NULL)
+    return h5e_set_auto(API.H5E_DEFAULT, C_NULL, C_NULL)
 end
 
 end # module API

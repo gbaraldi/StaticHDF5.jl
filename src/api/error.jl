@@ -33,7 +33,7 @@ macro h5error(msg)
     # This needs to be a macro as we need to call `h5e_get_current_stack()` _before_
     # evaluating the message expression, as some message expressions can call API
     # functions, which would clear the error stack.
-    quote
+    return quote
         err_id = h5e_get_current_stack()
         if h5e_get_num(err_id) > 0
             throw(H5Error($(esc(msg)), err_id))
@@ -76,7 +76,7 @@ function Base.showerror(io::IO, err::H5Error)
         errval = unsafe_load(errptr)
         print(io, "\n", lpad("[$n] ", 4 + ndigits(n_total)))
         if errval.func_name != C_NULL
-            printstyled(io, unsafe_string(errval.func_name); bold=true)
+            printstyled(io, unsafe_string(errval.func_name); bold = true)
             print(io, ": ")
         end
         major = h5e_get_msg(errval.maj_num)[2]
@@ -88,7 +88,7 @@ function Base.showerror(io::IO, err::H5Error)
                 "\n",
                 " "^(4 + ndigits(n_total)),
                 unsafe_string(errval.desc);
-                color=:light_black
+                color = :light_black
             )
         end
         if SHORT_ERROR[]

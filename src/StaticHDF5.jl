@@ -1,9 +1,9 @@
 module StaticHDF5
 
 export open_file, create_file, close_file
-export write_array, read_array
+export write_object, read_object
 export open_group, create_group, close_group, list_objects
-export get_array_info
+export get_dataset_info, is_dataset, is_group
 export READ_ONLY, READ_WRITE, CREATE  # Export the constants
 
 include("api/api.jl")
@@ -54,7 +54,7 @@ file = open_file("data.h5")
 close_file(file)
 ```
 """
-function open_file(filename::String, mode::Integer=READ_ONLY)
+function open_file(filename::String, mode::Integer = READ_ONLY)
     file_id = API.h5f_open(filename, mode, API.H5P_DEFAULT)
     return HDF5File(file_id)
 end
@@ -76,7 +76,7 @@ file = create_file("new_data.h5")
 close_file(file)
 ```
 """
-function create_file(filename::String, mode::Integer=CREATE)
+function create_file(filename::String, mode::Integer = CREATE)
     file_id = API.h5f_create(filename, mode, API.H5P_DEFAULT, API.H5P_DEFAULT)
     return HDF5File(file_id)
 end
@@ -154,7 +154,7 @@ function close_group(group::HDF5Group)
 end
 
 """
-    write_array(object::HDF5Object, dataset_name::String, data::AbstractArray{T}) where T
+    write_object(object::HDF5Object, dataset_name::String, data::AbstractArray)
 
 Write an array to an HDF5 object.
 
@@ -167,16 +167,51 @@ This converts to a regular Array before writing.
 # Example
 ```julia
 file = create_file("data.h5")
-write_array(file, "matrix", rand(10, 10))
+write_object(file, "matrix", rand(10, 10))
 close_file(file)
 ```
 """
-function write_array(object::HDF5Object, dataset_name::String, data::AbstractArray)
+function write_object(object::HDF5Object, dataset_name::String, data::AbstractArray)
     # Convert to regular Array if it's not already one
-    return write_array(object, dataset_name, Array(data)::Array)
+    return write_object(object, dataset_name, Array(data)::Array)
 end
 
-function write_array(object::HDF5Object, dataset_name::String, @nospecialize(data::Array))
+# Method for string arrays (without @nospecialize for better type stability)
+function write_object(object::HDF5Object, dataset_name::String, data::Array{String})
+    rank = length(size(data))
+    dims = _convert(Vector{Int}, size(data))
+
+    reverse!(dims)  # HDF5 uses C ordering (last dimension varies fastest)
+    dataspace_id = API.h5s_create_simple(rank, dims, C_NULL)
+    datatype_id = _get_h5_datatype(String)
+
+    # Create dataset
+    dataset_id = API.h5d_create(
+        get_hid(object),
+        dataset_name,
+        datatype_id,
+        dataspace_id,
+        API.H5P_DEFAULT,
+        API.H5P_DEFAULT,
+        API.H5P_DEFAULT
+    )
+
+    try
+        # For string arrays, we need to create an array of string pointers
+        str_ptrs = [pointer(s) for s in data]
+        API.h5d_write(dataset_id, datatype_id, API.H5S_ALL, API.H5S_ALL, API.H5P_DEFAULT, str_ptrs)
+    finally
+        # Clean up
+        API.h5t_close(datatype_id)
+        API.h5s_close(dataspace_id)
+        API.h5d_close(dataset_id)
+    end
+
+    return nothing
+end
+
+# Method for non-string arrays
+function write_object(object::HDF5Object, dataset_name::String, @nospecialize(data::Array))
     rank = length(size(data))
     dims = _convert(Vector{Int}, size(data))
 
@@ -195,42 +230,136 @@ function write_array(object::HDF5Object, dataset_name::String, @nospecialize(dat
         API.H5P_DEFAULT
     )
 
-    # Write data
-    API.h5d_write(
-        dataset_id,
-        datatype_id,
-        API.H5S_ALL,
-        API.H5S_ALL,
-        API.H5P_DEFAULT,
-        data
-    )
-
-    # Clean up
-    API.h5t_close(datatype_id)
-    API.h5s_close(dataspace_id)
-    API.h5d_close(dataset_id)
+    try
+        # Write data normally for non-string types
+        API.h5d_write(dataset_id, datatype_id, API.H5S_ALL, API.H5S_ALL, API.H5P_DEFAULT, data)
+    finally
+        # Clean up
+        API.h5t_close(datatype_id)
+        API.h5s_close(dataspace_id)
+        API.h5d_close(dataset_id)
+    end
 
     return nothing
 end
 
 """
-    get_array_info(object::HDF5Object, dataset_name::String) -> (Type, Tuple)
+    write_object(object::HDF5Object, dataset_name::String, data::String)
 
-Get information about an array stored in an HDF5 file.
-Returns a tuple containing the element type and dimensions of the array.
+Write a scalar string to an HDF5 object.
+
+# Arguments
+- `object`: HDF5 object (file, group, or dataset)
+- `dataset_name`: Name of the dataset to create
+- `data`: String to write
+
+# Example
+```julia
+file = create_file("data.h5")
+write_object(file, "message", "Hello, World!")
+close_file(file)
+```
+"""
+function write_object(object::HDF5Object, dataset_name::String, data::String)
+    # Create scalar dataspace
+    dataspace_id = API.h5s_create(API.H5S_SCALAR)
+    datatype_id = _get_h5_datatype(String)
+
+    dataset_id = API.h5d_create(
+        get_hid(object),
+        dataset_name,
+        datatype_id,
+        dataspace_id,
+        API.H5P_DEFAULT,
+        API.H5P_DEFAULT,
+        API.H5P_DEFAULT
+    )
+
+    try
+        # For variable-length strings, we need to pass a pointer to the string pointer
+        str_ptr = [pointer(data)]
+        API.h5d_write(dataset_id, datatype_id, API.H5S_ALL, API.H5S_ALL, API.H5P_DEFAULT, str_ptr)
+    finally
+        API.h5d_close(dataset_id)
+        API.h5t_close(datatype_id)
+        API.h5s_close(dataspace_id)
+    end
+    return nothing
+end
+
+"""
+    write_object(object::HDF5Object, dataset_name::String, data::Number)
+
+Write a scalar number to an HDF5 object.
+
+# Arguments
+- `object`: HDF5 object (file, group, or dataset)
+- `dataset_name`: Name of the dataset to create
+- `data`: Number to write
+
+# Example
+```julia
+file = create_file("data.h5")
+write_object(file, "value", 42)
+write_object(file, "pi", 3.14159)
+close_file(file)
+```
+"""
+function write_object(object::HDF5Object, dataset_name::String, data::Number)
+    # Create scalar dataspace
+    dataspace_id = API.h5s_create(API.H5S_SCALAR)
+    datatype_id = _get_h5_datatype(typeof(data))
+
+    dataset_id = API.h5d_create(
+        get_hid(object),
+        dataset_name,
+        datatype_id,
+        dataspace_id,
+        API.H5P_DEFAULT,
+        API.H5P_DEFAULT,
+        API.H5P_DEFAULT
+    )
+
+    try
+        data_array = [data]
+        API.h5d_write(dataset_id, datatype_id, API.H5S_ALL, API.H5S_ALL, API.H5P_DEFAULT, data_array)
+    finally
+        API.h5d_close(dataset_id)
+        API.h5t_close(datatype_id)
+        API.h5s_close(dataspace_id)
+    end
+    return nothing
+end
+
+"""
+    get_dataset_info(object::HDF5Object, dataset_name::String)
+
+Get information about a dataset stored in an HDF5 file.
 
 # Arguments
 - `object`: HDF5 object (file, group)
 - `dataset_name`: Name of the dataset to get information about
 
+# Returns
+Named tuple with fields: `type`, `dims`, `is_scalar`
+
 # Example
 ```julia
 file_id = open_file("data.h5")
-elem_type, dims = get_array_info(file_id, "matrix")
+info = get_dataset_info(file_id, "matrix")
+println("Type: ", info.type)
+println("Dimensions: ", info.dims)
 close_file(file_id)
 ```
 """
-function get_array_info(object::HDF5Object, dataset_name::String)
+function get_dataset_info(object::HDF5Object, dataset_name::String)
+    # Check if the path exists and what type it is
+    if is_group(object, dataset_name)
+        throw(ArgumentError("'$dataset_name' is a group, not a dataset. Use group operations instead."))
+    elseif !is_dataset(object, dataset_name)
+        throw(ArgumentError("'$dataset_name' does not exist or is not a dataset."))
+    end
+
     dataset_id = API.h5d_open(get_hid(object), dataset_name, API.H5P_DEFAULT)
     dataspace_id = API.h5d_get_space(dataset_id)
 
@@ -241,6 +370,9 @@ function get_array_info(object::HDF5Object, dataset_name::String)
     # Convert dimensions to Julia ordering (first dimension varies fastest)
     dims = Tuple(reverse(dims_out))
 
+    # Check if it's a scalar
+    is_scalar = API.h5s_get_simple_extent_type(dataspace_id) == API.H5S_SCALAR
+
     datatype_id = API.h5d_get_type(dataset_id)
     julia_type = _get_julia_type(datatype_id)
 
@@ -249,11 +381,11 @@ function get_array_info(object::HDF5Object, dataset_name::String)
     API.h5s_close(dataspace_id)
     API.h5d_close(dataset_id)
 
-    return julia_type, dims
+    return (type = julia_type, dims = dims, is_scalar = is_scalar)
 end
 
 """
-    read_array(object::HDF5Object, dataset_name::String, ::Type{Array{T,N}}) where {T,N}
+    read_object(object::HDF5Object, dataset_name::String, ::Type{Array{T,N}}) where {T,N}
 
 Read an array from an HDF5 file with a specified array type.
 This version ensures type stability by pre-specifying both the element type and dimensionality.
@@ -266,16 +398,16 @@ This version ensures type stability by pre-specifying both the element type and 
 # Example
 ```julia
 file_id = open_file("data.h5")
-data = read_array(file_id, "vector", Array{Float64,1})  # For 1D arrays
-data = read_array(file_id, "matrix", Array{Int,2})      # For 2D arrays
-data = read_array(file_id, "tensor", Array{Float32,3})  # For 3D arrays
+data = read_object(file_id, "vector", Array{Float64,1})  # For 1D arrays
+data = read_object(file_id, "matrix", Array{Int,2})      # For 2D arrays
+data = read_object(file_id, "tensor", Array{Float32,3})  # For 3D arrays
 close_file(file_id)
 ```
 
 # Notes
 Throws an error if the actual dimensions don't match the expected dimensionality.
 """
-function read_array(object::HDF5Object, dataset_name::String, ::Type{Array{T,N}}) where {T,N}
+function read_object(object::HDF5Object, dataset_name::String, ::Type{Array{T, N}}) where {T, N}
     dataset_id = API.h5d_open(get_hid(object), dataset_name, API.H5P_DEFAULT)
     dataspace_id = API.h5d_get_space(dataset_id)
 
@@ -296,18 +428,45 @@ function read_array(object::HDF5Object, dataset_name::String, ::Type{Array{T,N}}
         API.h5t_close(stored_datatype_id)
         API.h5s_close(dataspace_id)
         API.h5d_close(dataset_id)
-        throw(ArgumentError("Type mismatch: requested type $T is not the stored type $stored_julia_type"))
+        # Add the actual types when type printing doesn't get complained in JET
+        throw(ArgumentError("Type mismatch: requested type is not the stored type "))
     end
 
-    # Read data
-    API.h5d_read(
-        dataset_id,
-        stored_datatype_id,
-        API.H5S_ALL,
-        API.H5S_ALL,
-        API.H5P_DEFAULT,
-        data
-    )
+    # Read data with special handling for string arrays
+    if T === String
+        # For string arrays, we need to handle variable-length strings
+        if API.h5t_is_variable_str(stored_datatype_id)
+            # Variable-length strings
+            str_ptrs = Vector{Ptr{Cchar}}(undef, length(data))
+            fill!(str_ptrs, C_NULL)
+            API.h5d_read(dataset_id, stored_datatype_id, API.H5S_ALL, API.H5S_ALL, API.H5P_DEFAULT, str_ptrs)
+
+            # Convert pointers to strings
+            for i in eachindex(data)
+                data[i] = str_ptrs[i] == C_NULL ? "" : unsafe_string(str_ptrs[i])
+            end
+
+            # Clean up variable-length data
+            API.h5d_vlen_reclaim(stored_datatype_id, dataspace_id, API.H5P_DEFAULT, str_ptrs)
+        else
+            # Fixed-length strings
+            str_size = API.h5t_get_size(stored_datatype_id)
+            buf = Vector{UInt8}(undef, str_size * length(data))
+            API.h5d_read(dataset_id, stored_datatype_id, API.H5S_ALL, API.H5S_ALL, API.H5P_DEFAULT, buf)
+
+            # Convert buffer to strings
+            for i in eachindex(data)
+                start_idx = (i - 1) * str_size + 1
+                end_idx = i * str_size
+                str_bytes = buf[start_idx:end_idx]
+                nulpos = findfirst(==(0x00), str_bytes)
+                data[i] = nulpos !== nothing ? String(str_bytes[1:(nulpos - 1)]) : String(str_bytes)
+            end
+        end
+    else
+        # Normal read for non-string types
+        API.h5d_read(dataset_id, stored_datatype_id, API.H5S_ALL, API.H5S_ALL, API.H5P_DEFAULT, data)
+    end
 
     # Clean up
     API.h5t_close(stored_datatype_id)
@@ -318,9 +477,9 @@ function read_array(object::HDF5Object, dataset_name::String, ::Type{Array{T,N}}
 end
 
 """
-    read_array(object::HDF5Object, dataset_name::String) where {T,N}
+    read_object(object::HDF5Object, dataset_name::String)
 
-Read an array from an HDF5 file with a specified array type.
+Read an object from an HDF5 file, automatically inferring the type.
 This infers the array dimensions from the file so it's not type stable
 
 # Arguments
@@ -330,13 +489,97 @@ This infers the array dimensions from the file so it's not type stable
 # Example
 ```julia
 file_id = open_file("data.h5")
-data = read_array(file_id, "vector")  # For 1D arrays
+data = read_object(file_id, "vector")  # For 1D arrays
 close_file(file_id)
 ```
 """
-function read_array(object::HDF5Object, dataset_name::String)
-    elem_type, dims = get_array_info(object, dataset_name)
-    return read_array(object, dataset_name, Array{elem_type, length(dims)})
+function read_object(object::HDF5Object, dataset_name::String)
+    info = get_dataset_info(object, dataset_name)
+    if info.is_scalar || length(info.dims) == 0
+        # It's a scalar
+        return read_object(object, dataset_name, info.type)
+    else
+        # It's an array
+        return read_object(object, dataset_name, Array{info.type, length(info.dims)})
+    end
+end
+
+"""
+    read_object(object::HDF5Object, dataset_name::String, ::Type{T}) where T
+
+Read a scalar object from an HDF5 file with a specified type for type stability.
+
+# Arguments
+- `object`: HDF5 object (file, group) to read from
+- `dataset_name`: Name of the dataset to read
+- `T`: The scalar type to read (e.g., String, Int, Float64, etc.)
+
+# Example
+```julia
+file = open_file("data.h5")
+text = read_object(file, "text", String)
+scalar = read_object(file, "scalar", Int)
+close_file(file)
+```
+"""
+function read_object(object::HDF5Object, dataset_name::String, ::Type{T}) where {T}
+    # For scalar types that are not arrays
+    if !(T <: AbstractArray)
+        dataset_id = API.h5d_open(get_hid(object), dataset_name, API.H5P_DEFAULT)
+        dataspace_id = API.h5d_get_space(dataset_id)
+
+        # Check if it's actually a scalar
+        if API.h5s_get_simple_extent_type(dataspace_id) != API.H5S_SCALAR
+            API.h5s_close(dataspace_id)
+            API.h5d_close(dataset_id)
+            throw(ArgumentError("Expected scalar dataset, but found array"))
+        end
+
+        # Get stored datatype for type checking
+        stored_datatype_id = API.h5d_get_type(dataset_id)
+        stored_julia_type = _get_julia_type(stored_datatype_id)
+
+        if !(stored_julia_type === T)
+            API.h5t_close(stored_datatype_id)
+            API.h5s_close(dataspace_id)
+            API.h5d_close(dataset_id)
+            throw(ArgumentError("Type mismatch: requested type is not the stored type"))
+        end
+
+        # Read scalar data
+        if T === String
+            # Special handling for strings
+            if API.h5t_is_variable_str(stored_datatype_id)
+                buf = Vector{Ptr{Cchar}}(undef, 1)
+                buf[1] = C_NULL
+                API.h5d_read(dataset_id, stored_datatype_id, API.H5S_ALL, API.H5S_ALL, API.H5P_DEFAULT, pointer(buf))
+                str_ptr = buf[1]
+                result = str_ptr == C_NULL ? "" : unsafe_string(str_ptr)
+                API.h5d_vlen_reclaim(stored_datatype_id, dataspace_id, API.H5P_DEFAULT, pointer(buf))
+            else
+                str_size = API.h5t_get_size(stored_datatype_id)
+                buf = Vector{UInt8}(undef, str_size)
+                API.h5d_read(dataset_id, stored_datatype_id, API.H5S_ALL, API.H5S_ALL, API.H5P_DEFAULT, pointer(buf))
+                nulpos = findfirst(==(0x00), buf)
+                result = nulpos !== nothing ? String(copy(buf[1:(nulpos - 1)])) : String(copy(buf))
+            end
+        else
+            # For numeric scalars
+            data_array = Vector{T}(undef, 1)
+            API.h5d_read(dataset_id, stored_datatype_id, API.H5S_ALL, API.H5S_ALL, API.H5P_DEFAULT, data_array)
+            result = data_array[1]
+        end
+
+        # Clean up
+        API.h5t_close(stored_datatype_id)
+        API.h5s_close(dataspace_id)
+        API.h5d_close(dataset_id)
+
+        return result
+    else
+        # For array types, delegate to the array method
+        return read_object(object, dataset_name, T)
+    end
 end
 
 """
@@ -355,7 +598,7 @@ objects = list_objects(file_id)
 close_file(file_id)
 ```
 """
-function list_objects(object::HDF5Object, path::String="/")
+function list_objects(object::HDF5Object, path::String = "/")
     should_close = false
     if isa(object, HDF5File)
         # Open the group
@@ -387,11 +630,11 @@ function list_objects(object::HDF5Object, path::String="/")
     end
 
     # Iterate through objects
-    for i in 0:(n_objs-1)
+    for i in 0:(n_objs - 1)
         # Get object name
         len = API.h5l_get_name_by_idx(group_id, ".", API.H5_INDEX_NAME, API.H5_ITER_NATIVE, i, C_NULL, 0, API.H5P_DEFAULT)
-        buf = Vector{UInt8}(undef, len+1)
-        API.h5l_get_name_by_idx(group_id, ".", API.H5_INDEX_NAME, API.H5_ITER_NATIVE, i, buf, len+1, API.H5P_DEFAULT)
+        buf = Vector{UInt8}(undef, len + 1)
+        API.h5l_get_name_by_idx(group_id, ".", API.H5_INDEX_NAME, API.H5_ITER_NATIVE, i, buf, len + 1, API.H5P_DEFAULT)
         name = unsafe_string(pointer(buf))
 
         # Get object info
@@ -426,10 +669,10 @@ close_file(file_id)
 Base.keys(object::HDF5Object) = list_objects(object)
 
 # Type-stable conversion for NTuple -> Vector
-function _convert(::Type{Vector{T}}, @nospecialize(tup::NTuple{N,U} where N)) where {T,U}
+function _convert(::Type{Vector{T}}, @nospecialize(tup::NTuple{N, U} where {N})) where {T, U}
     N = length(tup)
     v = Vector{T}(undef, N)
-    for i = 1:N
+    for i in 1:N
         if T === U
             v[i] = tup[i]
         else
@@ -466,7 +709,25 @@ function _get_h5_datatype(@nospecialize(T::Type))
         bool_type = API.h5t_copy(API.H5T_NATIVE_B8)
         API.h5t_set_precision(bool_type, 1)
         return bool_type
-    else @assert false "unsupported datatype" end
+    elseif T === String
+        # Create variable-length string type
+        str_type = API.h5t_copy(API.H5T_C_S1)
+        API.h5t_set_size(str_type, API.H5T_VARIABLE)
+        API.h5t_set_cset(str_type, API.H5T_CSET_UTF8)
+        return str_type
+    elseif T === ComplexF64
+        complex_type = API.h5t_create(API.H5T_COMPOUND, 16)
+        API.h5t_insert(complex_type, "r", 0, API.h5t_copy(API.H5T_NATIVE_DOUBLE))
+        API.h5t_insert(complex_type, "i", 8, API.h5t_copy(API.H5T_NATIVE_DOUBLE))
+        return complex_type
+    elseif T === ComplexF32
+        complex_type = API.h5t_create(API.H5T_COMPOUND, 8)
+        API.h5t_insert(complex_type, "r", 0, API.h5t_copy(API.H5T_NATIVE_FLOAT))
+        API.h5t_insert(complex_type, "i", 4, API.h5t_copy(API.H5T_NATIVE_FLOAT))
+        return complex_type
+    else
+        @assert false "unsupported datatype"
+    end
 end
 
 function _get_julia_type(datatype_id::API.hid_t)
@@ -515,8 +776,8 @@ function _get_julia_type(datatype_id::API.hid_t)
         elseif size == 8
             return Float64
         end
-    # elseif class == API.H5T_STRING
-    #     return String # This is not how Strings work
+    elseif class == API.H5T_STRING
+        return String
     elseif class == API.H5T_BITFIELD
         size = API.h5t_get_size(datatype_id)
         if size == 1
@@ -533,12 +794,98 @@ function _get_julia_type(datatype_id::API.hid_t)
         else
             error("Unsupported bitfield size: $size")
         end
+    elseif class == API.H5T_COMPOUND
+        nmembers = API.h5t_get_nmembers(datatype_id)
+        if nmembers == 2
+            # Get member names
+            name1_ptr = API.h5t_get_member_name(datatype_id, 0)
+            name2_ptr = API.h5t_get_member_name(datatype_id, 1)
+            name1 = name1_ptr isa String ? name1_ptr : unsafe_string(name1_ptr)
+            name2 = name2_ptr isa String ? name2_ptr : unsafe_string(name2_ptr)
+
+
+            if (name1 == "r" && name2 == "i")
+                # Get the base type from the first member
+                member_type = API.h5t_get_member_type(datatype_id, 0)
+                member_class = API.h5t_get_class(member_type)
+                member_size = API.h5t_get_size(member_type)
+
+                API.h5t_close(member_type)
+
+                if member_class == API.H5T_FLOAT
+                    if member_size == 4
+                        return ComplexF32
+                    elseif member_size == 8
+                        return ComplexF64
+                    end
+                end
+            end
+        end
+        error("Unsupported compound datatype")
     end
 
     # Default to Float64 if we can't determine the type
     error("Unsupported HDF5 datatype class: $class")
 end
 
+"""
+    is_dataset(object::HDF5Object, path::String) -> Bool
 
+Check if a path in the HDF5 file refers to a dataset.
+
+# Arguments
+- `object`: HDF5 object (file, group)
+- `path`: Path to check
+
+# Example
+```julia
+file = open_file("data.h5")
+if is_dataset(file, "my_array")
+    data = read_object(file, "my_array")
+end
+close_file(file)
+```
+"""
+function is_dataset(object::HDF5Object, path::String)
+    try
+        obj_id = API.h5o_open(get_hid(object), path, API.H5P_DEFAULT)
+        obj_type = API.h5i_get_type(obj_id)
+        API.h5o_close(obj_id)
+        return obj_type == API.H5I_DATASET
+    catch
+        return false
+    end
+end
+
+"""
+    is_group(object::HDF5Object, path::String) -> Bool
+
+Check if a path in the HDF5 file refers to a group.
+
+# Arguments
+- `object`: HDF5 object (file, group)
+- `path`: Path to check
+
+# Example
+```julia
+file = open_file("data.h5")
+if is_group(file, "measurements")
+    group = open_group(file, "measurements")
+    # ... work with group ...
+    close_group(group)
+end
+close_file(file)
+```
+"""
+function is_group(object::HDF5Object, path::String)
+    try
+        obj_id = API.h5o_open(get_hid(object), path, API.H5P_DEFAULT)
+        obj_type = API.h5i_get_type(obj_id)
+        API.h5o_close(obj_id)
+        return obj_type == API.H5I_GROUP
+    catch
+        return false
+    end
+end
 
 end # module StaticHDF5
