@@ -16,7 +16,7 @@ using HDF5
         test_array_bool = [true, false, true, false, true]
         test_string = "This is a test string"
         test_string_array = ["Alice", "Bob", "Charlie", "David"]
-        test_complex = [1.0+2.0im, 3.0+4.0im, 5.0+6.0im]
+        test_complex = [1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im]
 
         file = create_file(test_file)
         write_object(file, "array_1d", test_array_1d)
@@ -73,7 +73,7 @@ using HDF5
         test_array_bool = [true, false, true, false, true]
         test_string = "This is a test string from HDF5.jl"
         test_string_array = ["Eve", "Frank", "Grace", "Henry"]
-        test_complex = [1.0+2.0im, 3.0+4.0im, 5.0+6.0im]
+        test_complex = [1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im]
 
         h5open(test_file, "w") do file
             file["float_array_1d"] = test_array_1d

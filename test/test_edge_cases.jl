@@ -102,7 +102,7 @@ using StaticHDF5
 
         # This should fail because dataset already exists
         @test_throws StaticHDF5.API.H5Error write_object(file, "data", new_data)
-        
+
         close_file(file)
     end
 
@@ -111,41 +111,40 @@ using StaticHDF5
         file = create_file(joinpath(tmpdir, "test_file.h5"))
         write_object(file, "data", [1, 2, 3])
         write_object(file, "scalar", 42)
-        
+
         # Create a group for testing
         group = create_group(file, "test_group")
         write_object(group, "nested_data", [4, 5, 6])
         close_group(group)
-        
+
         close_file(file)
 
         file = open_file(joinpath(tmpdir, "test_file.h5"))
-        
+
         # Test get_dataset_info on group (should give helpful error)
         @test_throws ArgumentError("'test_group' is a group, not a dataset. Use group operations instead.") get_dataset_info(file, "test_group")
-        
+
         # Test get_dataset_info on non-existent path
         @test_throws ArgumentError("'nonexistent' does not exist or is not a dataset.") get_dataset_info(file, "nonexistent")
-        
+
         # Test get_dataset_info on valid array dataset (should work)
         info = get_dataset_info(file, "data")
         @test info.type == Int64
         @test info.dims == (3,)
         @test !info.is_scalar
-        
+
         # Test get_dataset_info on scalar dataset (should work)
         scalar_info = get_dataset_info(file, "scalar")
         @test scalar_info.type == Int64
         @test scalar_info.dims == ()
         @test scalar_info.is_scalar
-        
+
         # Test get_dataset_info on nested dataset (should work)
         nested_info = get_dataset_info(file, "test_group/nested_data")
         @test nested_info.type == Int64
         @test nested_info.dims == (3,)
         @test !nested_info.is_scalar
-        
+
         close_file(file)
     end
 end
-

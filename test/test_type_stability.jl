@@ -1,4 +1,3 @@
-
 using Test
 using StaticHDF5
 using JET
@@ -31,7 +30,7 @@ using JET
         float_array = [1.1, 2.2, 3.3, 4.4]
         bool_array = [true, false, true, false]
         string_array = ["hello", "world", "test"]
-        complex_array = [1.0+2.0im, 3.0+4.0im, 5.0+6.0im]
+        complex_array = [1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im]
 
         JET.@test_opt write_object(file, "int_array", int_array)
         JET.@test_opt write_object(file, "float_array", float_array)
@@ -78,7 +77,7 @@ using JET
         float_array = [1.1, 2.2, 3.3, 4.4]
         bool_array = [true, false, true, false]
         string_array = ["hello", "world", "test"]
-        complex_array = [1.0+2.0im, 3.0+4.0im, 5.0+6.0im]
+        complex_array = [1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im]
 
         StaticHDF5.write_object(file, "int_array", int_array)
         StaticHDF5.write_object(file, "float_array", float_array)
@@ -91,18 +90,18 @@ using JET
 
         JET.@test_opt StaticHDF5.get_dataset_info(file, "int_array")
 
-        JET.@test_opt StaticHDF5.read_object(file, "int_array", Array{Int,1})
-        JET.@test_opt StaticHDF5.read_object(file, "float_array", Array{Float64,1})
-        JET.@test_opt StaticHDF5.read_object(file, "bool_array", Array{Bool,1})
-        JET.@test_opt StaticHDF5.read_object(file, "string_array", Array{String,1})
-        JET.@test_opt StaticHDF5.read_object(file, "complex_array", Array{ComplexF64,1})
+        JET.@test_opt StaticHDF5.read_object(file, "int_array", Array{Int, 1})
+        JET.@test_opt StaticHDF5.read_object(file, "float_array", Array{Float64, 1})
+        JET.@test_opt StaticHDF5.read_object(file, "bool_array", Array{Bool, 1})
+        JET.@test_opt StaticHDF5.read_object(file, "string_array", Array{String, 1})
+        JET.@test_opt StaticHDF5.read_object(file, "complex_array", Array{ComplexF64, 1})
 
         # Verify the arrays were read correctly
-        @test StaticHDF5.read_object(file, "int_array", Array{Int,1}) == int_array
-        @test StaticHDF5.read_object(file, "float_array", Array{Float64,1}) == float_array
-        @test StaticHDF5.read_object(file, "bool_array", Array{Bool,1}) == bool_array
-        @test StaticHDF5.read_object(file, "string_array", Array{String,1}) == string_array
-        @test StaticHDF5.read_object(file, "complex_array", Array{ComplexF64,1}) == complex_array
+        @test StaticHDF5.read_object(file, "int_array", Array{Int, 1}) == int_array
+        @test StaticHDF5.read_object(file, "float_array", Array{Float64, 1}) == float_array
+        @test StaticHDF5.read_object(file, "bool_array", Array{Bool, 1}) == bool_array
+        @test StaticHDF5.read_object(file, "string_array", Array{String, 1}) == string_array
+        @test StaticHDF5.read_object(file, "complex_array", Array{ComplexF64, 1}) == complex_array
 
         @test StaticHDF5.read_object(file, "int_array", Vector{Int}) == int_array
         @test StaticHDF5.read_object(file, "float_array", Vector{Float64}) == float_array
@@ -127,12 +126,12 @@ using JET
         StaticHDF5.close_file(file)
         file = StaticHDF5.open_file(joinpath(tmpdir, "test_file.h5"), StaticHDF5.READ_ONLY)
 
-        JET.@test_opt StaticHDF5.read_object(file, "array_2d", Array{Int,2})
-        JET.@test_opt StaticHDF5.read_object(file, "array_3d", Array{Int,3})
+        JET.@test_opt StaticHDF5.read_object(file, "array_2d", Array{Int, 2})
+        JET.@test_opt StaticHDF5.read_object(file, "array_3d", Array{Int, 3})
 
         # Verify the arrays were read correctly
-        @test StaticHDF5.read_object(file, "array_2d", Array{Int,2}) == array_2d
-        @test StaticHDF5.read_object(file, "array_3d", Array{Int,3}) == array_3d
+        @test StaticHDF5.read_object(file, "array_2d", Array{Int, 2}) == array_2d
+        @test StaticHDF5.read_object(file, "array_3d", Array{Int, 3}) == array_3d
 
         # Close the file
         StaticHDF5.close_file(file)
@@ -227,8 +226,8 @@ using JET
 
         # Test multidimensional string and complex arrays
         string_matrix = ["a" "b"; "c" "d"]
-        complex_matrix = [1.0+1.0im 2.0+2.0im; 3.0+3.0im 4.0+4.0im]
-        complex32_array = ComplexF32[1.0+1.0im, 2.0+2.0im, 3.0+3.0im]
+        complex_matrix = [1.0 + 1.0im 2.0 + 2.0im; 3.0 + 3.0im 4.0 + 4.0im]
+        complex32_array = ComplexF32[1.0 + 1.0im, 2.0 + 2.0im, 3.0 + 3.0im]
 
         JET.@test_opt write_object(file, "string_matrix", string_matrix)
         JET.@test_opt write_object(file, "complex_matrix", complex_matrix)
