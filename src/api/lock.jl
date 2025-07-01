@@ -19,7 +19,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-
 const liblock = ReentrantLock()
 
 # Try to acquire the lock (test-test-set) and close if successful
@@ -27,9 +26,9 @@ const liblock = ReentrantLock()
 # https://github.com/JuliaIO/HDF5.jl/issues/1048
 function try_close_finalizer(x)
     if !islocked(liblock) && trylock(liblock) do
-        close(x)
-        true
-    end
+            close(x)
+            true
+        end
     else
         finalizer(try_close_finalizer, x)
     end
