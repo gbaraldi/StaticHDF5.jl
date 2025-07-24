@@ -26,15 +26,15 @@ Pkg.add("StaticHDF5")
 using StaticHDF5
 
 # Create a file and write some arrays
-file_id = create_file("example.h5")
-write_array(file_id, "integers", [1, 2, 3, 4, 5])
-write_array(file_id, "matrix", reshape(1:12, 3, 4))
-close_file(file_id)
+file = create_file("example.h5")
+write_object(file, "integers", [1, 2, 3, 4, 5])
+write_object(file, "matrix", reshape(1:12, 3, 4))
+close_file(file)
 
 # Read arrays back
 file_id = open_file("example.h5")
-integers = read_array(file_id, "integers", Vector{Int64})
-matrix = read_array(file_id, "matrix", Matrix{Int64})
+integers = read_object(file_id, "integers", Vector{Int64})
+matrix = read_object(file_id, "matrix", Matrix{Int64})
 close_file(file_id)
 ```
 
@@ -42,19 +42,19 @@ close_file(file_id)
 
 ```julia
 # Create a file with groups
-file_id = create_file("grouped_example.h5")
+file = create_file("grouped_example.h5")
 
 # Create a group and write data to it
-group_id = create_group(file_id, "measurements")
-write_array(group_id, "temperatures", [22.1, 22.3, 22.0, 21.8])
+group = create_group(file, "measurements")
+write_object(group, "temperatures", [22.1, 22.3, 22.0, 21.8])
 
 # Create a subgroup
-subgroup_id = create_group(group_id, "day1")
-write_array(subgroup_id, "morning", [20.1, 20.5, 21.0])
+subgroup = create_group(group, "day1")
+write_object(subgroup, "morning", [20.1, 20.5, 21.0])
 
 # Close groups and file
-StaticHDF5.API.h5g_close(subgroup_id)
-StaticHDF5.API.h5g_close(group_id)
+close_group(subgroup)
+close_group(group)
 close_file(file_id)
 ```
 
@@ -65,13 +65,13 @@ For --trim use StaticHDF5 has a way to pass in the expected return type, this ma
 1. **Using parametric array types** (recommended):
    ```julia
    # For 1D arrays (vectors)
-   vector = read_array(file_id, "vector", Vector{Float64})
+   vector = read_object(file_id, "vector", Vector{Float64})
 
    # For 2D arrays (matrices)
-   matrix = read_array(file_id, "matrix", Matrix{Int})
+   matrix = read_object(file_id, "matrix", Matrix{Int})
 
    # For N-dimensional arrays
-   tensor = read_array(file_id, "tensor", Array{Float32, 3})
+   tensor = read_object(file_id, "tensor", Array{Float32, 3})
    ```
 
 The standard version of `read_array` without the return type is not stable because it's not possible to know what kind of array is in the file
